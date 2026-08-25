@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import ServiceManagement
 
 class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
@@ -17,8 +18,98 @@ class MainFlutterWindow: NSWindow {
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     TrayDragBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
+    StartupBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
 
     super.awakeFromNib()
+  }
+}
+
+class StartupBridge: NSObject {
+  static let shared = StartupBridge()
+  private var channel: FlutterMethodChannel?
+
+  func setup(messenger: FlutterBinaryMessenger) {
+    channel = FlutterMethodChannel(name: "dropzone/startup", binaryMessenger: messenger)
+    channel?.setMethodCallHandler { [weak self] (call, result) in
+      guard let self = self else { return }
+      if call.method == "setLaunchAtStartup" {
+        let enable = (call.arguments as? [String: Any])?["enable"] as? Bool ?? false
+        let success = self.setLaunchAtStartup(enabled: enable)
+        result(success)
+      } else if call.method == "isLaunchAtStartupEnabled" {
+        result(self.isLaunchAtStartupEnabled())
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  func setLaunchAtStartup(enabled: Bool) -> Bool {
+    if #available(macOS 13.0, *) {
+      do {
+        if enabled {
+          if SMAppService.mainApp.status != .enabled {
+            try SMAppService.mainApp.register()
+          }
+        } else {
+          if SMAppService.mainApp.status == .enabled {
+            try SMAppService.mainApp.unregister()
+          }
+        }
+        let isEnabled = SMAppService.mainApp.status == .enabled
+        if isEnabled == enabled {
+          return isEnabled
+        }
+        return fallbackSetLoginItem(enabled: enabled)
+      } catch {
+        print("SMAppService error, using fallback: \(error)")
+        return fallbackSetLoginItem(enabled: enabled)
+      }
+    } else {
+      return fallbackSetLoginItem(enabled: enabled)
+    }
+  }
+
+  func isLaunchAtStartupEnabled() -> Bool {
+    if #available(macOS 13.0, *) {
+      if SMAppService.mainApp.status == .enabled {
+        return true
+      }
+    }
+    return fallbackIsLoginItemEnabled()
+  }
+
+  private func fallbackSetLoginItem(enabled: Bool) -> Bool {
+    let bundlePath = Bundle.main.bundlePath
+    let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "dropzoneclone"
+    if enabled {
+      let script = "tell application \"System Events\" to make login item at end with properties {path:\"\(bundlePath)\", hidden:false, name:\"\(appName)\"}"
+      _ = executeAppleScript(script)
+    } else {
+      let script = "tell application \"System Events\" to delete (every login item whose name is \"\(appName)\")"
+      _ = executeAppleScript(script)
+    }
+    return fallbackIsLoginItemEnabled()
+  }
+
+  private func fallbackIsLoginItemEnabled() -> Bool {
+    let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "dropzoneclone"
+    let script = "tell application \"System Events\" to get name of every login item"
+    if let result = executeAppleScript(script) {
+      return result.contains(appName)
+    }
+    return false
+  }
+
+  private func executeAppleScript(_ script: String) -> String? {
+    var error: NSDictionary?
+    if let scriptObject = NSAppleScript(source: script) {
+      let output = scriptObject.executeAndReturnError(&error)
+      if error == nil {
+        return output.stringValue ?? "true"
+      }
+    }
+    return nil
   }
 }
 
