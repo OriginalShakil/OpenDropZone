@@ -147,7 +147,7 @@ dropzoneclone/
    ```bash
    flutter build macos --release
    ```
-   The compiled `.app` will be located in `build/macos/Build/Products/Release/Open Drop Zone.app`.
+   The compiled `.app` will be located in `build/macos/Build/Products/Release/OpenDropZone.app`.
 
 ---
 

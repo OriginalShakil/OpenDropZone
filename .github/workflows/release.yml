@@ -38,8 +38,8 @@ jobs:
       - name: Compress App Bundle
         run: |
           cd "build/macos/Build/Products/Release"
-          zip -r -y "Open-Drop-Zone-macOS.zip" "Open Drop Zone.app"
-          ls -la "Open-Drop-Zone-macOS.zip"
+          zip -r -y "OpenDropZone-macOS.zip" "OpenDropZone.app"
+          ls -la "OpenDropZone-macOS.zip"
 
       - name: Create GitHub Release & Upload Asset
         uses: softprops/action-gh-release@v2
@@ -50,6 +50,6 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
-            build/macos/Build/Products/Release/Open-Drop-Zone-macOS.zip
+            build/macos/Build/Products/Release/OpenDropZone-macOS.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
