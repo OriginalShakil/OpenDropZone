@@ -5,11 +5,13 @@ import 'settings_sheet.dart';
 class HeaderBar extends StatelessWidget {
   final int fileCount;
   final VoidCallback onClearAll;
+  final VoidCallback? onAddFiles;
 
   const HeaderBar({
     super.key,
     required this.fileCount,
     required this.onClearAll,
+    this.onAddFiles,
   });
 
   void _openSettings(BuildContext context) async {
@@ -99,6 +101,20 @@ class HeaderBar extends StatelessWidget {
             ),
           ],
           const Spacer(),
+          // Add files "+" button
+          if (onAddFiles != null) ...[
+            IconButton(
+              icon: const Icon(Icons.add_rounded, size: 20),
+              tooltip: 'Add files...',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.75)
+                  : Colors.black.withValues(alpha: 0.75),
+              onPressed: onAddFiles,
+            ),
+            const SizedBox(width: 2),
+          ],
           // Clear all button if files present
           if (fileCount > 0) ...[
             InkWell(

@@ -8,12 +8,14 @@ class FileListWidget extends StatefulWidget {
   final List<FileItem> files;
   final Function(FileItem) onRemove;
   final Function(List<FileItem>)? onRemoveMultiple;
+  final VoidCallback? onBrowseFiles;
 
   const FileListWidget({
     super.key,
     required this.files,
     required this.onRemove,
     this.onRemoveMultiple,
+    this.onBrowseFiles,
   });
 
   @override
@@ -459,39 +461,71 @@ class _FileListWidgetState extends State<FileListWidget> {
     if (widget.files.isEmpty) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.grid_view_rounded,
-                size: 36,
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.18)
-                    : Colors.black.withValues(alpha: 0.15),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Shelf is empty',
-                style: TextStyle(
-                  fontSize: 12,
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
                   color: isDark
-                      ? Colors.white.withValues(alpha: 0.35)
-                      : Colors.black.withValues(alpha: 0.35),
-                  fontWeight: FontWeight.w500,
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : Colors.black.withValues(alpha: 0.04),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : Colors.black.withValues(alpha: 0.08),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.cloud_upload_outlined,
+                  size: 30,
+                  color: Color(0xFF007AFF),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Drop files anywhere to store',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  color: isDark ? Colors.white : const Color(0xFF1D1D1F),
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
-                'Drop files above to hold and drag them out anytime',
+                'Drag any files, images, or folders into this window to hold and use them anytime',
                 style: TextStyle(
-                  fontSize: 10.5,
+                  fontSize: 11,
                   color: isDark
-                      ? Colors.white.withValues(alpha: 0.25)
-                      : Colors.black.withValues(alpha: 0.25),
+                      ? Colors.white.withValues(alpha: 0.45)
+                      : Colors.black.withValues(alpha: 0.45),
                 ),
                 textAlign: TextAlign.center,
               ),
+              if (widget.onBrowseFiles != null) ...[
+                const SizedBox(height: 16),
+                TextButton.icon(
+                  onPressed: widget.onBrowseFiles,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    backgroundColor: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.black.withValues(alpha: 0.05),
+                    foregroundColor: isDark ? Colors.white : const Color(0xFF1D1D1F),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  icon: const Icon(Icons.folder_open_rounded, size: 16),
+                  label: const Text(
+                    'Browse files...',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
