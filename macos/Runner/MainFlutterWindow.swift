@@ -1,6 +1,8 @@
 import Cocoa
 import FlutterMacOS
 import ServiceManagement
+import QuickLookThumbnailing
+import AVFoundation
 
 class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
@@ -20,8 +22,170 @@ class MainFlutterWindow: NSWindow {
     TrayDragBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
     StartupBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
     NativeDragOutBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger, window: self)
+    FileIconBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
 
     super.awakeFromNib()
+  }
+}
+
+class FileIconBridge: NSObject {
+  static let shared = FileIconBridge()
+  private var channel: FlutterMethodChannel?
+
+  func setup(messenger: FlutterBinaryMessenger) {
+    channel = FlutterMethodChannel(name: "dropzone/file_icon", binaryMessenger: messenger)
+    channel?.setMethodCallHandler { [weak self] (call, result) in
+      guard let self = self else { return }
+      if call.method == "getFileIcon" {
+        guard let args = call.arguments as? [String: Any],
+              let path = args["path"] as? String else {
+          result(nil)
+          return
+        }
+        let size = CGFloat((args["size"] as? Double) ?? 128.0)
+        self.generateThumbnail(path: path, size: size) { data in
+          result(data)
+        }
+      } else if call.method == "getFileIcons" {
+        guard let args = call.arguments as? [String: Any],
+              let paths = args["paths"] as? [String] else {
+          result([:])
+          return
+        }
+        let size = CGFloat((args["size"] as? Double) ?? 128.0)
+        self.generateThumbnails(paths: paths, size: size) { dict in
+          result(dict)
+        }
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  func generateThumbnails(paths: [String], size: CGFloat, completion: @escaping ([String: FlutterStandardTypedData]) -> Void) {
+    let group = DispatchGroup()
+    var results: [String: FlutterStandardTypedData] = [:]
+    let lock = NSLock()
+
+    for path in paths {
+      group.enter()
+      generateThumbnail(path: path, size: size) { data in
+        if let data = data {
+          lock.lock()
+          results[path] = FlutterStandardTypedData(bytes: data)
+          lock.unlock()
+        }
+        group.leave()
+      }
+    }
+
+    group.notify(queue: .main) {
+      completion(results)
+    }
+  }
+
+  func generateThumbnail(path: String, size: CGFloat, completion: @escaping (Data?) -> Void) {
+    guard FileManager.default.fileExists(atPath: path) else {
+      completion(nil)
+      return
+    }
+
+    let url = URL(fileURLWithPath: path)
+    let ext = url.pathExtension.lowercased()
+
+    // 1. Direct fast load for images (PNG, JPG, JPEG, WEBP, GIF, HEIC, TIFF, BMP, ICO)
+    let imageExtensions = ["png", "jpg", "jpeg", "gif", "webp", "heic", "tiff", "tif", "bmp", "ico"]
+    if imageExtensions.contains(ext) {
+      if let image = NSImage(contentsOfFile: path) {
+        if let pngData = self.resizeAndConvertToPNG(image: image, targetSize: NSSize(width: size, height: size)) {
+          completion(pngData)
+          return
+        }
+      }
+    }
+
+    // 2. Video thumbnail generation for video files (MP4, MOV, M4V, MKV, AVI, WEBM)
+    let videoExtensions = ["mp4", "mov", "m4v", "mkv", "avi", "webm"]
+    if videoExtensions.contains(ext) {
+      DispatchQueue.global(qos: .userInitiated).async {
+        let asset = AVURLAsset(url: url)
+        let imageGenerator = AVAssetImageGenerator(asset: asset)
+        imageGenerator.appliesPreferredTrackTransform = true
+        imageGenerator.maximumSize = CGSize(width: size * 2, height: size * 2)
+        let time = CMTime(seconds: 0.5, preferredTimescale: 600)
+        do {
+          let cgImage = try imageGenerator.copyCGImage(at: time, actualTime: nil)
+          let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: size, height: size))
+          if let pngData = self.resizeAndConvertToPNG(image: nsImage, targetSize: NSSize(width: size, height: size)) {
+            DispatchQueue.main.async {
+              completion(pngData)
+            }
+            return
+          }
+        } catch {
+          // Fallback to QuickLook
+        }
+
+        DispatchQueue.main.async {
+          self.quickLookOrSystemIcon(url: url, path: path, size: size, completion: completion)
+        }
+      }
+      return
+    }
+
+    // 3. For all other files (PDF, docx, apps, folders), use QuickLook thumbnail or system icon
+    quickLookOrSystemIcon(url: url, path: path, size: size, completion: completion)
+  }
+
+  private func quickLookOrSystemIcon(url: URL, path: String, size: CGFloat, completion: @escaping (Data?) -> Void) {
+    if #available(macOS 10.15, *) {
+      let request = QLThumbnailGenerator.Request(
+        fileAt: url,
+        size: CGSize(width: size, height: size),
+        scale: NSScreen.main?.backingScaleFactor ?? 2.0,
+        representationTypes: .all
+      )
+
+      QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { [weak self] (thumbnail, error) in
+        guard let self = self else { return }
+        if let thumbnail = thumbnail {
+          let nsImage = NSImage(cgImage: thumbnail.cgImage, size: NSSize(width: size, height: size))
+          if let pngData = self.resizeAndConvertToPNG(image: nsImage, targetSize: NSSize(width: size, height: size)) {
+            DispatchQueue.main.async {
+              completion(pngData)
+            }
+            return
+          }
+        }
+        DispatchQueue.main.async {
+          completion(self.getSystemIcon(path: path, size: size))
+        }
+      }
+    } else {
+      completion(getSystemIcon(path: path, size: size))
+    }
+  }
+
+  private func getSystemIcon(path: String, size: CGFloat) -> Data? {
+    let image = NSWorkspace.shared.icon(forFile: path)
+    return resizeAndConvertToPNG(image: image, targetSize: NSSize(width: size, height: size))
+  }
+
+  private func resizeAndConvertToPNG(image: NSImage, targetSize: NSSize) -> Data? {
+    let newImage = NSImage(size: targetSize)
+    newImage.lockFocus()
+    image.draw(in: NSRect(origin: .zero, size: targetSize),
+               from: NSRect(origin: .zero, size: image.size),
+               operation: .copy,
+               fraction: 1.0)
+    newImage.unlockFocus()
+
+    guard let tiffData = newImage.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiffData),
+          let pngData = bitmap.representation(using: .png, properties: [:]) else {
+      return nil
+    }
+    return pngData
   }
 }
 

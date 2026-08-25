@@ -53,6 +53,12 @@ class FileItem {
 
   String get extension => p.extension(path).toLowerCase();
 
+  bool get isImage {
+    if (isDirectory) return false;
+    final ext = extension;
+    return const ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico'].contains(ext);
+  }
+
   String get formattedSize {
     if (isDirectory) return 'Folder';
     if (sizeBytes <= 0) return '0 B';
