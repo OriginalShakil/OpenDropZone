@@ -6,5 +6,10 @@
 	<true/>
 	<key>com.apple.security.files.user-selected.read-only</key>
 	<true/>
+	<key>com.apple.security.temporary-exception.apple-events</key>
+	<array>
+		<string>com.apple.finder</string>
+		<string>com.apple.systemevents</string>
+	</array>
 </dict>
 </plist>

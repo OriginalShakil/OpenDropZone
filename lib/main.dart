@@ -3,13 +3,16 @@ import 'dart:ui';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 import 'models/file_item.dart';
+import 'services/shortcut_service.dart';
 import 'services/startup_service.dart';
 import 'services/tray_window_controller.dart';
 import 'widgets/file_list_widget.dart';
 import 'widgets/header_bar.dart';
 import 'widgets/popover_container.dart';
+import 'widgets/settings_sheet.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,6 +41,7 @@ void main() async {
   // Initialize Services
   await StartupService.instance.init();
   await TrayWindowController.instance.init();
+  await ShortcutService.instance.init();
 
   runApp(const DropzoneApp());
 }
@@ -79,10 +83,12 @@ class DropzoneHome extends StatefulWidget {
 
 class _DropzoneHomeState extends State<DropzoneHome>
     with SingleTickerProviderStateMixin {
+  final GlobalKey<FileListWidgetState> _fileListKey = GlobalKey<FileListWidgetState>();
   final List<FileItem> _files = [];
   Timer? _cleanupTimer;
   double _arrowOffset = TrayWindowController.windowWidth / 2;
   bool _isDragOverPopup = false;
+  bool _isSettingsOpen = false;
 
   late AnimationController _openAnimController;
   late Animation<double> _scaleAnimation;
@@ -149,6 +155,10 @@ class _DropzoneHomeState extends State<DropzoneHome>
     };
 
     TrayWindowController.instance.onAnimateOut = () async {
+      if (_isSettingsOpen && mounted) {
+        Navigator.of(context, rootNavigator: true).maybePop();
+        _isSettingsOpen = false;
+      }
       await _openAnimController.reverse();
     };
 
@@ -215,6 +225,46 @@ class _DropzoneHomeState extends State<DropzoneHome>
     });
   }
 
+  void _toggleSettings() {
+    if (_isSettingsOpen) {
+      _closeSettings();
+    } else {
+      _openSettings();
+    }
+  }
+
+  void _closeSettings() {
+    if (_isSettingsOpen && mounted) {
+      Navigator.of(context, rootNavigator: true).maybePop();
+      setState(() {
+        _isSettingsOpen = false;
+      });
+    }
+  }
+
+  void _openSettings() async {
+    if (_isSettingsOpen) return;
+    setState(() {
+      _isSettingsOpen = true;
+    });
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => SettingsSheet(
+        onClearAll: _onClearAll,
+        fileCount: _files.length,
+      ),
+    );
+
+    if (mounted) {
+      setState(() {
+        _isSettingsOpen = false;
+      });
+    }
+  }
+
   Future<void> _pickFiles() async {
     TrayWindowController.instance.setModalOpen(true);
     try {
@@ -257,144 +307,169 @@ class _DropzoneHomeState extends State<DropzoneHome>
             ? Colors.white.withValues(alpha: 0.18)
             : Colors.black.withValues(alpha: 0.14));
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: DropTarget(
-        onDragEntered: (_) {
-          TrayWindowController.instance.setCursorInPopup(true);
-          setState(() {
-            _isDragOverPopup = true;
-          });
+    return CallbackShortcuts(
+      bindings: {
+        // Command + A: Select all items
+        const SingleActivator(LogicalKeyboardKey.keyA, meta: true): () {
+          _fileListKey.currentState?.selectAll();
         },
-        onDragExited: (_) {
-          TrayWindowController.instance.setCursorInPopup(false);
-          setState(() {
-            _isDragOverPopup = false;
-          });
+        // Command + ,: Toggle Settings
+        const SingleActivator(LogicalKeyboardKey.comma, meta: true): () {
+          _toggleSettings();
         },
-        onDragDone: (details) {
-          TrayWindowController.instance.resetAutoOpenedForDrag();
-          TrayWindowController.instance.setCursorInPopup(false);
-          setState(() {
-            _isDragOverPopup = false;
-          });
-          final items = details.files
-              .where((f) => f.path.isNotEmpty)
-              .map((f) => FileItem.fromPath(f.path))
-              .toList();
-          if (items.isNotEmpty) {
-            _onFilesAdded(items);
+        // Escape: Close settings or clear selection
+        const SingleActivator(LogicalKeyboardKey.escape): () {
+          if (_isSettingsOpen) {
+            _closeSettings();
+          } else {
+            _fileListKey.currentState?.clearSelection();
           }
         },
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: SlideTransition(
-            position: _slideAnimation,
-            child: ScaleTransition(
-              scale: _scaleAnimation,
-              alignment: Alignment(alignmentX, -1.0),
-              child: ClipPath(
-                clipper: PopoverClipper(
-                  arrowOffset: _arrowOffset,
-                  arrowWidth: 20.0,
-                  arrowHeight: 10.0,
-                  cornerRadius: 16.0,
-                ),
-                child: CustomPaint(
-                  foregroundPainter: PopoverBorderPainter(
-                    arrowOffset: _arrowOffset,
-                    arrowWidth: 20.0,
-                    arrowHeight: 10.0,
-                    cornerRadius: 16.0,
-                    borderColor: borderColor,
-                    borderWidth: _isDragOverPopup ? 2.0 : 1.2,
-                  ),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-                    child: Container(
-                      color: fillColor,
-                      padding: const EdgeInsets.only(top: 10.0),
-                      child: Stack(
-                        children: [
-                          // Main Body: Header + Full-Height File Grid
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: DropTarget(
+            onDragEntered: (_) {
+              TrayWindowController.instance.setCursorInPopup(true);
+              setState(() {
+                _isDragOverPopup = true;
+              });
+            },
+            onDragExited: (_) {
+              TrayWindowController.instance.setCursorInPopup(false);
+              setState(() {
+                _isDragOverPopup = false;
+              });
+            },
+            onDragDone: (details) {
+              TrayWindowController.instance.resetAutoOpenedForDrag();
+              TrayWindowController.instance.setCursorInPopup(false);
+              setState(() {
+                _isDragOverPopup = false;
+              });
+              final items = details.files
+                  .where((f) => f.path.isNotEmpty)
+                  .map((f) => FileItem.fromPath(f.path))
+                  .toList();
+              if (items.isNotEmpty) {
+                _onFilesAdded(items);
+              }
+            },
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: SlideTransition(
+                position: _slideAnimation,
+                child: ScaleTransition(
+                  scale: _scaleAnimation,
+                  alignment: Alignment(alignmentX, -1.0),
+                  child: ClipPath(
+                    clipper: PopoverClipper(
+                      arrowOffset: _arrowOffset,
+                      arrowWidth: 20.0,
+                      arrowHeight: 10.0,
+                      cornerRadius: 16.0,
+                    ),
+                    child: CustomPaint(
+                      foregroundPainter: PopoverBorderPainter(
+                        arrowOffset: _arrowOffset,
+                        arrowWidth: 20.0,
+                        arrowHeight: 10.0,
+                        cornerRadius: 16.0,
+                        borderColor: borderColor,
+                        borderWidth: _isDragOverPopup ? 2.0 : 1.2,
+                      ),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                        child: Container(
+                          color: fillColor,
+                          padding: const EdgeInsets.only(top: 10.0),
+                          child: Stack(
                             children: [
-                              // Header bar
-                              HeaderBar(
-                                fileCount: _files.length,
-                                onClearAll: _onClearAll,
-                                onAddFiles: _pickFiles,
-                              ),
-
-                              // Full height files grid
-                              Expanded(
-                                child: FileListWidget(
-                                  files: _files,
-                                  onRemove: _onFileRemoved,
-                                  onRemoveMultiple: _onFilesRemoved,
-                                  onBrowseFiles: _pickFiles,
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          // Full-window drag-hover frosted overlay
-                          if (_isDragOverPopup)
-                            Positioned.fill(
-                              child: IgnorePointer(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF007AFF).withValues(alpha: 0.16),
+                              // Main Body: Header + Full-Height File Grid
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  // Header bar
+                                  HeaderBar(
+                                    fileCount: _files.length,
+                                    onClearAll: _onClearAll,
+                                    onAddFiles: _pickFiles,
+                                    onOpenSettings: _toggleSettings,
                                   ),
-                                  child: BackdropFilter(
-                                    filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                                    child: Center(
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                                        decoration: BoxDecoration(
-                                          color: isDark
-                                              ? const Color(0xFF1E1E1E).withValues(alpha: 0.94)
-                                              : Colors.white.withValues(alpha: 0.96),
-                                          borderRadius: BorderRadius.circular(16),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withValues(alpha: 0.25),
-                                              blurRadius: 20,
-                                              offset: const Offset(0, 6),
-                                            ),
-                                          ],
-                                          border: Border.all(
-                                            color: const Color(0xFF007AFF).withValues(alpha: 0.5),
-                                            width: 1.5,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(
-                                              Icons.add_to_photos_rounded,
-                                              color: Color(0xFF007AFF),
-                                              size: 24,
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Text(
-                                              'Drop files into shelf',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 13,
-                                                color: isDark ? Colors.white : const Color(0xFF1D1D1F),
+
+                                  // Full height files grid
+                                  Expanded(
+                                    child: FileListWidget(
+                                      key: _fileListKey,
+                                      files: _files,
+                                      onRemove: _onFileRemoved,
+                                      onRemoveMultiple: _onFilesRemoved,
+                                      onBrowseFiles: _pickFiles,
+                                    ),
+                                  ),
+                                ],
+                              ),
+
+                              // Full-window drag-hover frosted overlay
+                              if (_isDragOverPopup)
+                                Positioned.fill(
+                                  child: IgnorePointer(
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF007AFF).withValues(alpha: 0.16),
+                                      ),
+                                      child: BackdropFilter(
+                                        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                                        child: Center(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                                            decoration: BoxDecoration(
+                                              color: isDark
+                                                  ? const Color(0xFF1E1E1E).withValues(alpha: 0.94)
+                                                  : Colors.white.withValues(alpha: 0.96),
+                                              borderRadius: BorderRadius.circular(16),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black.withValues(alpha: 0.25),
+                                                  blurRadius: 20,
+                                                  offset: const Offset(0, 6),
+                                                ),
+                                              ],
+                                              border: Border.all(
+                                                color: const Color(0xFF007AFF).withValues(alpha: 0.5),
+                                                width: 1.5,
                                               ),
                                             ),
-                                          ],
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(
+                                                  Icons.add_to_photos_rounded,
+                                                  color: Color(0xFF007AFF),
+                                                  size: 24,
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Text(
+                                                  'Drop files into shelf',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 13,
+                                                    color: isDark ? Colors.white : const Color(0xFF1D1D1F),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ),
-                        ],
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),

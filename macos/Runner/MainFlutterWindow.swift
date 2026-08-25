@@ -3,6 +3,7 @@ import FlutterMacOS
 import ServiceManagement
 import QuickLookThumbnailing
 import AVFoundation
+import Carbon
 
 class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
@@ -23,8 +24,175 @@ class MainFlutterWindow: NSWindow {
     StartupBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
     NativeDragOutBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger, window: self)
     FileIconBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
+    HotKeyBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
 
     super.awakeFromNib()
+  }
+}
+
+class HotKeyBridge: NSObject {
+  static let shared = HotKeyBridge()
+  private var channel: FlutterMethodChannel?
+  private var hotKeyRefs: [String: EventHotKeyRef] = [:]
+  private var hotKeyIds: [UInt32: String] = [:]
+  private var hotKeyHandlersInstalled = false
+
+  func setup(messenger: FlutterBinaryMessenger) {
+    channel = FlutterMethodChannel(name: "dropzone/hotkeys", binaryMessenger: messenger)
+    channel?.setMethodCallHandler { [weak self] (call, result) in
+      guard let self = self else { return }
+      if call.method == "registerHotKey" {
+        guard let args = call.arguments as? [String: Any],
+              let identifier = args["identifier"] as? String,
+              let keyCode = args["keyCode"] as? UInt32,
+              let modifiers = args["modifiers"] as? UInt32 else {
+          result(false)
+          return
+        }
+        let success = self.registerHotKey(identifier: identifier, keyCode: keyCode, modifiers: modifiers)
+        result(success)
+      } else if call.method == "unregisterHotKey" {
+        guard let args = call.arguments as? [String: Any],
+              let identifier = args["identifier"] as? String else {
+          result(false)
+          return
+        }
+        self.unregisterHotKey(identifier: identifier)
+        result(true)
+      } else if call.method == "getFinderSelection" {
+        let paths = self.getFinderSelectedPaths()
+        result(paths)
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    installCarbonEventHandler()
+  }
+
+  func registerHotKey(identifier: String, keyCode: UInt32, modifiers: UInt32) -> Bool {
+    unregisterHotKey(identifier: identifier)
+
+    let id: UInt32 = (identifier == "open_popup") ? 1 : 2
+    hotKeyIds[id] = identifier
+
+    var hotKeyRef: EventHotKeyRef?
+    var hotKeyID = EventHotKeyID()
+    hotKeyID.signature = OSType(0x445A4F4E) // 'DZON'
+    hotKeyID.id = id
+
+    var carbonModifiers: UInt32 = 0
+    if (modifiers & 1) != 0 { carbonModifiers |= UInt32(controlKey) }
+    if (modifiers & 2) != 0 { carbonModifiers |= UInt32(optionKey) }
+    if (modifiers & 4) != 0 { carbonModifiers |= UInt32(shiftKey) }
+    if (modifiers & 8) != 0 { carbonModifiers |= UInt32(cmdKey) }
+
+    let status = RegisterEventHotKey(
+      keyCode,
+      carbonModifiers,
+      hotKeyID,
+      GetEventDispatcherTarget(),
+      0,
+      &hotKeyRef
+    )
+
+    if status == noErr, let ref = hotKeyRef {
+      hotKeyRefs[identifier] = ref
+      return true
+    }
+    return false
+  }
+
+  func unregisterHotKey(identifier: String) {
+    if let ref = hotKeyRefs[identifier] {
+      UnregisterEventHotKey(ref)
+      hotKeyRefs.removeValue(forKey: identifier)
+    }
+  }
+
+  private func installCarbonEventHandler() {
+    guard !hotKeyHandlersInstalled else { return }
+    hotKeyHandlersInstalled = true
+
+    var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+    InstallEventHandler(GetEventDispatcherTarget(), { (nextHandler, theEvent, userData) -> OSStatus in
+      var hotKeyID = EventHotKeyID()
+      let status = GetEventParameter(
+        theEvent,
+        EventParamName(kEventParamDirectObject),
+        EventParamType(typeEventHotKeyID),
+        nil,
+        MemoryLayout<EventHotKeyID>.size,
+        nil,
+        &hotKeyID
+      )
+      if status == noErr {
+        HotKeyBridge.shared.handleHotKeyTriggered(id: hotKeyID.id)
+      }
+      return noErr
+    }, 1, &eventType, nil, nil)
+  }
+
+  func handleHotKeyTriggered(id: UInt32) {
+    guard let identifier = hotKeyIds[id] else { return }
+    DispatchQueue.main.async {
+      if identifier == "add_finder_selection" {
+        let paths = self.getFinderSelectedPaths()
+        if !paths.isEmpty {
+          TrayDragBridge.shared.handleFilesDropped(paths: paths)
+        }
+      }
+      self.channel?.invokeMethod("onHotKeyTriggered", arguments: ["identifier": identifier])
+    }
+  }
+
+  func getFinderSelectedPaths() -> [String] {
+    let script = """
+    tell application id "com.apple.finder"
+      set theSelection to selection
+      set pathList to {}
+      repeat with anItem in theSelection
+        try
+          set end of pathList to (POSIX path of (anItem as alias))
+        end try
+      end repeat
+      set AppleScript's text item delimiters to linefeed
+      return pathList as text
+    end tell
+    """
+
+    var error: NSDictionary?
+    if let scriptObject = NSAppleScript(source: script) {
+      let output = scriptObject.executeAndReturnError(&error)
+      if let resultStr = output.stringValue, !resultStr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let paths = resultStr.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        if !paths.isEmpty { return paths }
+      }
+    }
+
+    // Strategy 2: Fast clipboard copy event simulation
+    let pasteboard = NSPasteboard.general
+    let src = CGEventSource(stateID: .hidSystemState)
+    let cmdDown = CGEvent(keyboardEventSource: src, virtualKey: 0x37, keyDown: true)
+    let cDown = CGEvent(keyboardEventSource: src, virtualKey: 0x08, keyDown: true)
+    let cUp = CGEvent(keyboardEventSource: src, virtualKey: 0x08, keyDown: false)
+    let cmdUp = CGEvent(keyboardEventSource: src, virtualKey: 0x37, keyDown: false)
+
+    cDown?.flags = .maskCommand
+    cUp?.flags = .maskCommand
+
+    cmdDown?.post(tap: .cghidEventTap)
+    cDown?.post(tap: .cghidEventTap)
+    cUp?.post(tap: .cghidEventTap)
+    cmdUp?.post(tap: .cghidEventTap)
+
+    usleep(50000)
+
+    if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty {
+      return urls.map { $0.path }
+    }
+
+    return []
   }
 }
 

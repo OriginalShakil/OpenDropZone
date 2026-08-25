@@ -1,32 +1,18 @@
 import 'package:flutter/material.dart';
-import '../services/tray_window_controller.dart';
-import 'settings_sheet.dart';
 
 class HeaderBar extends StatelessWidget {
   final int fileCount;
   final VoidCallback onClearAll;
   final VoidCallback? onAddFiles;
+  final VoidCallback? onOpenSettings;
 
   const HeaderBar({
     super.key,
     required this.fileCount,
     required this.onClearAll,
     this.onAddFiles,
+    this.onOpenSettings,
   });
-
-  void _openSettings(BuildContext context) async {
-    TrayWindowController.instance.setModalOpen(true);
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => SettingsSheet(
-        onClearAll: onClearAll,
-        fileCount: fileCount,
-      ),
-    );
-    TrayWindowController.instance.setModalOpen(false);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -136,16 +122,16 @@ class HeaderBar extends StatelessWidget {
             ),
             const SizedBox(width: 4),
           ],
-          // Settings button
+          // Settings button (⌘,)
           IconButton(
             icon: const Icon(Icons.settings_outlined, size: 18),
-            tooltip: 'Settings',
+            tooltip: 'Settings (⌘,)',
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             color: isDark
                 ? Colors.white.withValues(alpha: 0.7)
                 : Colors.black.withValues(alpha: 0.7),
-            onPressed: () => _openSettings(context),
+            onPressed: onOpenSettings,
           ),
         ],
       ),

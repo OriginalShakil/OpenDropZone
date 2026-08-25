@@ -28,6 +28,8 @@
 	<string>MainMenu</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Dropzone uses Apple Events to add selected Finder items to your shelf.</string>
 	<key>NSServices</key>
 	<array>
 		<dict>

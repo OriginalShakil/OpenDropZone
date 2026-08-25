@@ -19,10 +19,10 @@ class FileListWidget extends StatefulWidget {
   });
 
   @override
-  State<FileListWidget> createState() => _FileListWidgetState();
+  State<FileListWidget> createState() => FileListWidgetState();
 }
 
-class _FileListWidgetState extends State<FileListWidget> {
+class FileListWidgetState extends State<FileListWidget> {
   static const MethodChannel _dragOutChannel = MethodChannel('dropzone/drag_out');
   static const MethodChannel _iconChannel = MethodChannel('dropzone/file_icon');
   static final Map<String, Uint8List> _iconCache = {};
@@ -146,13 +146,13 @@ class _FileListWidgetState extends State<FileListWidget> {
     });
   }
 
-  void _selectAll() {
+  void selectAll() {
     setState(() {
       _selectedPaths.addAll(widget.files.map((f) => f.path));
     });
   }
 
-  void _clearSelection() {
+  void clearSelection() {
     setState(() {
       _selectedPaths.clear();
     });
@@ -228,7 +228,7 @@ class _FileListWidgetState extends State<FileListWidget> {
         widget.onRemove(f);
       }
     }
-    _clearSelection();
+    clearSelection();
   }
 
   List<FileItem> _getItemsForDrag(FileItem currentItem) {
@@ -548,8 +548,8 @@ class _FileListWidgetState extends State<FileListWidget> {
               InkWell(
                 borderRadius: BorderRadius.circular(6),
                 onTap: selectedCount == widget.files.length
-                    ? _clearSelection
-                    : _selectAll,
+                    ? clearSelection
+                    : selectAll,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                   child: Row(
@@ -673,7 +673,7 @@ class _FileListWidgetState extends State<FileListWidget> {
             onPanStart: _onMarqueeStart,
             onPanUpdate: _onMarqueeUpdate,
             onPanEnd: _onMarqueeEnd,
-            onTap: _clearSelection,
+            onTap: clearSelection,
             child: Stack(
               children: [
                 // Grid of icons
