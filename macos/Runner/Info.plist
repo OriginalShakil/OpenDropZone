@@ -28,5 +28,34 @@
 	<string>MainMenu</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Send to Dropzone</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>dropFilesService</string>
+			<key>NSPortName</key>
+			<string>dropzoneclone</string>
+			<key>NSRequiredContext</key>
+			<dict>
+				<key>NSTextContent</key>
+				<string>FilePath</string>
+			</dict>
+			<key>NSSendFileTypes</key>
+			<array>
+				<string>public.item</string>
+			</array>
+			<key>NSSendTypes</key>
+			<array>
+				<string>NSFilenamesPboardType</string>
+				<string>public.file-url</string>
+				<string>NSURLPboardType</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
