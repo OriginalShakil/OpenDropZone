@@ -282,7 +282,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        'Clear Dropzone Items (${widget.fileCount})',
+                        'Clear Open Drop Zone Items (${widget.fileCount})',
                         style: const TextStyle(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w600,
@@ -301,7 +301,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Dropzone for macOS • v0.1.0',
+                  'Open Drop Zone for macOS • v0.1.0',
                   style: TextStyle(
                     fontSize: 10.5,
                     color: isDark

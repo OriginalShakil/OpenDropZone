@@ -96,23 +96,21 @@ class TrayWindowController with TrayListener, WindowListener {
       }
     });
 
-    final iconPath = Platform.isMacOS
-        ? 'assets/icons/tray_icon_template.png'
-        : 'assets/icons/tray_icon.png';
+    const iconPath = 'assets/icons/tray_icon_white.png';
 
     await trayManager.setIcon(iconPath);
-    await trayManager.setToolTip('Dropzone');
+    await trayManager.setToolTip('Open Drop Zone');
 
     final menu = Menu(
       items: [
         MenuItem(
           key: 'open_dropzone',
-          label: 'Open Dropzone',
+          label: 'Open Open Drop Zone',
         ),
         MenuItem.separator(),
         MenuItem(
           key: 'quit_app',
-          label: 'Quit Dropzone',
+          label: 'Quit Open Drop Zone',
         ),
       ],
     );

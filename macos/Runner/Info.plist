@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
+	<string>Open Drop Zone</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -29,19 +29,19 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Dropzone uses Apple Events to add selected Finder items to your shelf.</string>
+	<string>Open Drop Zone uses Apple Events to add selected Finder items to your shelf.</string>
 	<key>NSServices</key>
 	<array>
 		<dict>
 			<key>NSMenuItem</key>
 			<dict>
 				<key>default</key>
-				<string>Send to Dropzone</string>
+				<string>Send to Open Drop Zone</string>
 			</dict>
 			<key>NSMessage</key>
 			<string>dropFilesService</string>
 			<key>NSPortName</key>
-			<string>dropzoneclone</string>
+			<string>opendropzone</string>
 			<key>NSRequiredContext</key>
 			<dict>
 				<key>NSTextContent</key>

@@ -33,36 +33,38 @@ class HeaderBar extends StatelessWidget {
       child: Row(
         children: [
           // App Logo / Icon
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF007AFF), Color(0xFF5856D6)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF007AFF).withValues(alpha: 0.3),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              'assets/icons/OpenDropZone.png',
+              width: 28,
+              height: 28,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF007AFF), Color(0xFF5856D6)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              ],
-            ),
-            child: const Icon(
-              Icons.archive_outlined,
-              size: 16,
-              color: Colors.white,
+                child: const Icon(
+                  Icons.archive_outlined,
+                  size: 16,
+                  color: Colors.white,
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 10),
           // App Title
           Text(
-            'Dropzone',
+            'Open Drop Zone',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13.5,
               fontWeight: FontWeight.w700,
               color: isDark ? Colors.white : const Color(0xFF1D1D1F),
               letterSpacing: -0.2,
