@@ -201,6 +201,13 @@ class _DropzoneHomeState extends State<DropzoneHome>
     });
   }
 
+  void _onFilesRemoved(List<FileItem> items) {
+    setState(() {
+      final pathsToRemove = items.map((f) => f.path).toSet();
+      _files.removeWhere((f) => pathsToRemove.contains(f.path));
+    });
+  }
+
   void _onClearAll() {
     setState(() {
       _files.clear();
@@ -322,6 +329,7 @@ class _DropzoneHomeState extends State<DropzoneHome>
                             child: FileListWidget(
                               files: _files,
                               onRemove: _onFileRemoved,
+                              onRemoveMultiple: _onFilesRemoved,
                             ),
                           ),
 

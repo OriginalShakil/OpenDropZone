@@ -19,8 +19,101 @@ class MainFlutterWindow: NSWindow {
     RegisterGeneratedPlugins(registry: flutterViewController)
     TrayDragBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
     StartupBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
+    NativeDragOutBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger, window: self)
 
     super.awakeFromNib()
+  }
+}
+
+class NativeDragOutBridge: NSObject, NSDraggingSource {
+  static let shared = NativeDragOutBridge()
+  private var channel: FlutterMethodChannel?
+  weak var window: NSWindow?
+  private var currentDraggingPaths: [String] = []
+
+  func setup(messenger: FlutterBinaryMessenger, window: NSWindow?) {
+    self.window = window
+    channel = FlutterMethodChannel(name: "dropzone/drag_out", binaryMessenger: messenger)
+    channel?.setMethodCallHandler { [weak self] (call, result) in
+      guard let self = self else { return }
+      if call.method == "startDraggingFiles" {
+        guard let args = call.arguments as? [String: Any],
+              let paths = args["paths"] as? [String],
+              !paths.isEmpty else {
+          result(false)
+          return
+        }
+        let success = self.startDragging(paths: paths)
+        result(success)
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  func startDragging(paths: [String]) -> Bool {
+    guard let window = self.window,
+          let contentView = window.contentView else {
+      return false
+    }
+
+    self.currentDraggingPaths = paths
+    let fileURLs = paths.compactMap { URL(fileURLWithPath: $0) }
+    if fileURLs.isEmpty { return false }
+
+    let mouseLocation = window.mouseLocationOutsideOfEventStream
+    let viewPoint = contentView.convert(mouseLocation, from: nil)
+
+    var draggingItems: [NSDraggingItem] = []
+    for (index, url) in fileURLs.enumerated() {
+      let item = NSDraggingItem(pasteboardWriter: url as NSURL)
+      let icon = NSWorkspace.shared.icon(forFile: url.path)
+      let iconSize = NSSize(width: 36, height: 36)
+      let offset = CGFloat(min(index * 4, 20))
+      let frame = NSRect(
+        x: viewPoint.x - 18 + offset,
+        y: viewPoint.y - 18 - offset,
+        width: iconSize.width,
+        height: iconSize.height
+      )
+      item.setDraggingFrame(frame, contents: icon)
+      draggingItems.append(item)
+    }
+
+    let currentEvent = NSApp.currentEvent
+    let dragEvent: NSEvent
+    if let event = currentEvent, event.type == .leftMouseDragged || event.type == .leftMouseDown {
+      dragEvent = event
+    } else {
+      dragEvent = NSEvent.mouseEvent(
+        with: .leftMouseDown,
+        location: mouseLocation,
+        modifierFlags: [],
+        timestamp: ProcessInfo.processInfo.systemUptime,
+        windowNumber: window.windowNumber,
+        context: nil,
+        eventNumber: 0,
+        clickCount: 1,
+        pressure: 1.0
+      ) ?? NSEvent()
+    }
+
+    contentView.beginDraggingSession(with: draggingItems, event: dragEvent, source: self)
+    return true
+  }
+
+  func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+    // Primary move operation so Finder relocates the files instead of duplicating/copying them
+    return [.move, .generic, .copy]
+  }
+
+  func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+    let isMove = operation.contains(.move) || operation == .move || operation == .delete
+    channel?.invokeMethod("onDragEnded", arguments: [
+      "operation": isMove ? "move" : "copy",
+      "paths": currentDraggingPaths
+    ])
+    currentDraggingPaths = []
   }
 }
 
