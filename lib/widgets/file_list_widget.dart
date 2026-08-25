@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:super_drag_and_drop/super_drag_and_drop.dart';
 import '../models/file_item.dart';
+import '../services/tray_window_controller.dart';
 
 class FileListWidget extends StatelessWidget {
   final List<FileItem> files;
@@ -62,7 +64,7 @@ class FileListWidget extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'No files added yet',
+                'No files stored in shelf yet',
                 style: TextStyle(
                   fontSize: 12,
                   color: isDark
@@ -70,6 +72,17 @@ class FileListWidget extends StatelessWidget {
                       : Colors.black.withValues(alpha: 0.35),
                   fontWeight: FontWeight.w500,
                 ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Drop files above to hold and drag them out anytime',
+                style: TextStyle(
+                  fontSize: 10.5,
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.25)
+                      : Colors.black.withValues(alpha: 0.25),
+                ),
+                textAlign: TextAlign.center,
               ),
             ],
           ),
@@ -84,173 +97,229 @@ class FileListWidget extends StatelessWidget {
       itemBuilder: (context, index) {
         final item = files[index];
 
-        return Container(
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.05)
-                : Colors.black.withValues(alpha: 0.03),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.08)
-                  : Colors.black.withValues(alpha: 0.06),
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Row(
-            children: [
-              // File type icon badge
-              Container(
-                width: 34,
-                height: 34,
+        return DragItemWidget(
+          dragItemProvider: (request) async {
+            final session = request.session;
+            TrayWindowController.instance.setDraggingOut(true);
+
+            void onDragEnded() {
+              if (!session.dragging.value) {
+                session.dragging.removeListener(onDragEnded);
+                TrayWindowController.instance.setDraggingOut(false);
+              }
+            }
+
+            session.dragging.addListener(onDragEnded);
+
+            final dragItem = DragItem(
+              localData: {'path': item.path},
+            );
+
+            // Add native macOS file URI format for Finder, Browser uploaders, Discord, Slack, etc.
+            dragItem.add(Formats.fileUri(Uri.file(item.path)));
+            // Also provide plain text path as fallback
+            dragItem.add(Formats.plainText(item.path));
+
+            return dragItem;
+          },
+          allowedOperations: () => [
+            DropOperation.copy,
+            DropOperation.move,
+            DropOperation.link,
+          ],
+          child: DraggableWidget(
+            child: MouseRegion(
+              cursor: SystemMouseCursors.grab,
+              child: Container(
                 decoration: BoxDecoration(
-                  color: item.iconColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.05)
+                      : Colors.black.withValues(alpha: 0.03),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.black.withValues(alpha: 0.06),
+                  ),
                 ),
-                child: Icon(
-                  item.icon,
-                  size: 18,
-                  color: item.iconColor,
-                ),
-              ),
-              const SizedBox(width: 10),
-              // File details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Row(
                   children: [
-                    Text(
-                      item.name,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : const Color(0xFF1D1D1F),
+                    // Drag out handle indicator
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Icon(
+                        Icons.drag_indicator_rounded,
+                        size: 16,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.25)
+                            : Colors.black.withValues(alpha: 0.25),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Text(
-                          item.formattedSize,
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w500,
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.5)
-                                : Colors.black.withValues(alpha: 0.5),
+                    // File type icon badge
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: item.iconColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        item.icon,
+                        size: 18,
+                        color: item.iconColor,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // File details
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  item.name,
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? Colors.white
+                                        : const Color(0xFF1D1D1F),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Text(
+                                item.formattedSize,
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.5)
+                                      : Colors.black.withValues(alpha: 0.5),
+                                ),
+                              ),
+                              Text(
+                                ' • ',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.3)
+                                      : Colors.black.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  item.path,
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    color: isDark
+                                        ? Colors.white.withValues(alpha: 0.4)
+                                        : Colors.black.withValues(alpha: 0.4),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Actions menu
+                    PopupMenuButton<String>(
+                      icon: Icon(
+                        Icons.more_horiz_rounded,
+                        size: 18,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.6)
+                            : Colors.black.withValues(alpha: 0.6),
+                      ),
+                      tooltip: 'File options',
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'open',
+                          height: 32,
+                          child: Row(
+                            children: [
+                              Icon(Icons.launch_rounded, size: 15),
+                              SizedBox(width: 8),
+                              Text('Open File', style: TextStyle(fontSize: 12)),
+                            ],
                           ),
                         ),
-                        Text(
-                          ' • ',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.3)
-                                : Colors.black.withValues(alpha: 0.3),
+                        const PopupMenuItem(
+                          value: 'reveal',
+                          height: 32,
+                          child: Row(
+                            children: [
+                              Icon(Icons.folder_outlined, size: 15),
+                              SizedBox(width: 8),
+                              Text('Reveal in Finder',
+                                  style: TextStyle(fontSize: 12)),
+                            ],
                           ),
                         ),
-                        Expanded(
-                          child: Text(
-                            item.path,
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              color: isDark
-                                  ? Colors.white.withValues(alpha: 0.4)
-                                  : Colors.black.withValues(alpha: 0.4),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                        const PopupMenuItem(
+                          value: 'copy',
+                          height: 32,
+                          child: Row(
+                            children: [
+                              Icon(Icons.copy_rounded, size: 15),
+                              SizedBox(width: 8),
+                              Text('Copy Path', style: TextStyle(fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuDivider(height: 8),
+                        const PopupMenuItem(
+                          value: 'remove',
+                          height: 32,
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline_rounded,
+                                  size: 15, color: Colors.redAccent),
+                              SizedBox(width: 8),
+                              Text('Remove from shelf',
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.redAccent)),
+                            ],
                           ),
                         ),
                       ],
+                      onSelected: (value) {
+                        switch (value) {
+                          case 'open':
+                            _openFile(item.path);
+                            break;
+                          case 'reveal':
+                            _revealInFinder(item.path);
+                            break;
+                          case 'copy':
+                            _copyPath(context, item.path);
+                            break;
+                          case 'remove':
+                            onRemove(item);
+                            break;
+                        }
+                      },
                     ),
                   ],
                 ),
               ),
-              // Actions menu
-              PopupMenuButton<String>(
-                icon: Icon(
-                  Icons.more_horiz_rounded,
-                  size: 18,
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.6)
-                      : Colors.black.withValues(alpha: 0.6),
-                ),
-                tooltip: 'File options',
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'open',
-                    height: 32,
-                    child: Row(
-                      children: [
-                        Icon(Icons.launch_rounded, size: 15),
-                        SizedBox(width: 8),
-                        Text('Open File', style: TextStyle(fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'reveal',
-                    height: 32,
-                    child: Row(
-                      children: [
-                        Icon(Icons.folder_outlined, size: 15),
-                        SizedBox(width: 8),
-                        Text('Reveal in Finder', style: TextStyle(fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'copy',
-                    height: 32,
-                    child: Row(
-                      children: [
-                        Icon(Icons.copy_rounded, size: 15),
-                        SizedBox(width: 8),
-                        Text('Copy Path', style: TextStyle(fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuDivider(height: 8),
-                  const PopupMenuItem(
-                    value: 'remove',
-                    height: 32,
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete_outline_rounded,
-                            size: 15, color: Colors.redAccent),
-                        SizedBox(width: 8),
-                        Text('Remove',
-                            style: TextStyle(
-                                fontSize: 12, color: Colors.redAccent)),
-                      ],
-                    ),
-                  ),
-                ],
-                onSelected: (value) {
-                  switch (value) {
-                    case 'open':
-                      _openFile(item.path);
-                      break;
-                    case 'reveal':
-                      _revealInFinder(item.path);
-                      break;
-                    case 'copy':
-                      _copyPath(context, item.path);
-                      break;
-                    case 'remove':
-                      onRemove(item);
-                      break;
-                  }
-                },
-              ),
-            ],
+            ),
           ),
         );
       },

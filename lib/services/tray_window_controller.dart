@@ -12,10 +12,15 @@ class TrayWindowController with TrayListener, WindowListener {
   static const double windowHeight = 540.0;
 
   bool _isModalOpen = false;
+  bool _isDraggingOut = false;
   bool _isInitialized = false;
 
   void setModalOpen(bool isOpen) {
     _isModalOpen = isOpen;
+  }
+
+  void setDraggingOut(bool isDragging) {
+    _isDraggingOut = isDragging;
   }
 
   Future<void> init() async {
@@ -75,8 +80,8 @@ class TrayWindowController with TrayListener, WindowListener {
 
   @override
   void onWindowBlur() {
-    // Dismiss window when user clicks outside, unless a system dialog (like file picker) is open
-    if (!_isModalOpen) {
+    // Dismiss window when user clicks outside, unless a system dialog (like file picker) or drag-out is active
+    if (!_isModalOpen && !_isDraggingOut) {
       hideWindow();
     }
   }

@@ -152,7 +152,7 @@ class _DropzoneHomeState extends State<DropzoneHome> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'COLLECTED FILES',
+                        'FILE SHELF (DRAG OUT TO USE)',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -203,20 +203,21 @@ class _DropzoneHomeState extends State<DropzoneHome> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      Icons.tips_and_updates_outlined,
-                      size: 12,
+                      Icons.drag_indicator_rounded,
+                      size: 13,
                       color: isDark
-                          ? Colors.white.withValues(alpha: 0.4)
-                          : Colors.black.withValues(alpha: 0.4),
+                          ? const Color(0xFF007AFF)
+                          : const Color(0xFF007AFF),
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Click menu bar icon to toggle • Click outside to close',
+                      'Drag items directly out to Finder, Browser, or Apps',
                       style: TextStyle(
                         fontSize: 10,
+                        fontWeight: FontWeight.w500,
                         color: isDark
-                            ? Colors.white.withValues(alpha: 0.4)
-                            : Colors.black.withValues(alpha: 0.4),
+                            ? Colors.white.withValues(alpha: 0.5)
+                            : Colors.black.withValues(alpha: 0.55),
                       ),
                     ),
                   ],
