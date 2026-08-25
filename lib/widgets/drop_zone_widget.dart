@@ -41,6 +41,7 @@ class _DropZoneWidgetState extends State<DropZoneWidget>
   }
 
   void _onDragEntered() {
+    TrayWindowController.instance.setCursorInPopup(true);
     setState(() {
       _isDragging = true;
     });
@@ -48,6 +49,7 @@ class _DropZoneWidgetState extends State<DropZoneWidget>
   }
 
   void _onDragExited() {
+    TrayWindowController.instance.setCursorInPopup(false);
     setState(() {
       _isDragging = false;
     });
@@ -56,6 +58,8 @@ class _DropZoneWidgetState extends State<DropZoneWidget>
   }
 
   void _onDragDone(DropDoneDetails details) {
+    TrayWindowController.instance.resetAutoOpenedForDrag();
+    TrayWindowController.instance.setCursorInPopup(false);
     _onDragExited();
     final items = details.files
         .where((file) => file.path.isNotEmpty)
