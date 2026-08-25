@@ -15,20 +15,50 @@ class FileListWidget extends StatelessWidget {
     required this.onRemove,
   });
 
-  void _openFile(String path) {
+  void _showFileNotFoundSnackBar(BuildContext context, String fileName) {
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '"$fileName" was moved, deleted, or no longer exists.',
+          style: const TextStyle(fontSize: 12),
+        ),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  void _openFile(BuildContext context, FileItem item) {
+    if (!item.exists) {
+      onRemove(item);
+      _showFileNotFoundSnackBar(context, item.name);
+      return;
+    }
     if (Platform.isMacOS) {
-      Process.run('open', [path]);
+      Process.run('open', [item.path]);
     }
   }
 
-  void _revealInFinder(String path) {
+  void _revealInFinder(BuildContext context, FileItem item) {
+    if (!item.exists) {
+      onRemove(item);
+      _showFileNotFoundSnackBar(context, item.name);
+      return;
+    }
     if (Platform.isMacOS) {
-      Process.run('open', ['-R', path]);
+      Process.run('open', ['-R', item.path]);
     }
   }
 
-  void _copyPath(BuildContext context, String path) {
-    Clipboard.setData(ClipboardData(text: path));
+  void _copyPath(BuildContext context, FileItem item) {
+    if (!item.exists) {
+      onRemove(item);
+      _showFileNotFoundSnackBar(context, item.name);
+      return;
+    }
+    Clipboard.setData(ClipboardData(text: item.path));
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -99,6 +129,11 @@ class FileListWidget extends StatelessWidget {
 
         return DragItemWidget(
           dragItemProvider: (request) async {
+            if (!item.exists) {
+              onRemove(item);
+              return null;
+            }
+
             final session = request.session;
             TrayWindowController.instance.setDraggingOut(true);
 
@@ -106,6 +141,13 @@ class FileListWidget extends StatelessWidget {
               if (!session.dragging.value) {
                 session.dragging.removeListener(onDragEnded);
                 TrayWindowController.instance.setDraggingOut(false);
+
+                // If the file was moved or deleted by the destination app, remove it from shelf
+                Future.delayed(const Duration(milliseconds: 350), () {
+                  if (!item.exists) {
+                    onRemove(item);
+                  }
+                });
               }
             }
 
@@ -213,8 +255,8 @@ class FileListWidget extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 10.5,
                                   color: isDark
-                                      ? Colors.white.withValues(alpha: 0.3)
-                                      : Colors.black.withValues(alpha: 0.3),
+                                  ? Colors.white.withValues(alpha: 0.3)
+                                  : Colors.black.withValues(alpha: 0.3),
                                 ),
                               ),
                               Expanded(
@@ -302,13 +344,13 @@ class FileListWidget extends StatelessWidget {
                       onSelected: (value) {
                         switch (value) {
                           case 'open':
-                            _openFile(item.path);
+                            _openFile(context, item);
                             break;
                           case 'reveal':
-                            _revealInFinder(item.path);
+                            _revealInFinder(context, item);
                             break;
                           case 'copy':
-                            _copyPath(context, item.path);
+                            _copyPath(context, item);
                             break;
                           case 'remove':
                             onRemove(item);

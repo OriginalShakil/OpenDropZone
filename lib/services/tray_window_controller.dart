@@ -14,6 +14,7 @@ class TrayWindowController with TrayListener, WindowListener {
   bool _isModalOpen = false;
   bool _isDraggingOut = false;
   bool _isInitialized = false;
+  VoidCallback? onWindowShow;
 
   void setModalOpen(bool isOpen) {
     _isModalOpen = isOpen;
@@ -96,6 +97,7 @@ class TrayWindowController with TrayListener, WindowListener {
   }
 
   Future<void> showWindow() async {
+    onWindowShow?.call();
     await _positionWindowUnderTray();
     await windowManager.show();
     await windowManager.focus();

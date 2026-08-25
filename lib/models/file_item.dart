@@ -42,6 +42,15 @@ class FileItem {
     );
   }
 
+  bool get exists {
+    try {
+      final type = FileSystemEntity.typeSync(path);
+      return type != FileSystemEntityType.notFound;
+    } catch (_) {
+      return false;
+    }
+  }
+
   String get extension => p.extension(path).toLowerCase();
 
   String get formattedSize {

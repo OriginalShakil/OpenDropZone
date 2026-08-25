@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'models/file_item.dart';
@@ -75,13 +76,41 @@ class DropzoneHome extends StatefulWidget {
 
 class _DropzoneHomeState extends State<DropzoneHome> {
   final List<FileItem> _files = [];
+  Timer? _cleanupTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    TrayWindowController.instance.onWindowShow = _validateAndSyncFiles;
+    _cleanupTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) {
+      _validateAndSyncFiles();
+    });
+  }
+
+  @override
+  void dispose() {
+    _cleanupTimer?.cancel();
+    super.dispose();
+  }
+
+  void _validateAndSyncFiles() {
+    if (!mounted) return;
+    final hasMissing = _files.any((f) => !f.exists);
+    if (hasMissing) {
+      setState(() {
+        _files.removeWhere((file) => !file.exists);
+      });
+    }
+  }
 
   void _onFilesAdded(List<FileItem> newItems) {
     setState(() {
       for (final item in newItems) {
-        // Prevent duplicate entries
-        _files.removeWhere((f) => f.path == item.path);
-        _files.insert(0, item);
+        if (item.exists) {
+          // Prevent duplicate entries
+          _files.removeWhere((f) => f.path == item.path);
+          _files.insert(0, item);
+        }
       }
     });
   }
