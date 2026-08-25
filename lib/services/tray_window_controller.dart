@@ -166,7 +166,8 @@ class TrayWindowController with TrayListener, WindowListener {
 
   Future<void> toggleWindow() async {
     final isVisible = await windowManager.isVisible();
-    if (isVisible) {
+    final isFocused = await windowManager.isFocused();
+    if (isVisible && isFocused) {
       await hideWindow();
     } else {
       await showWindow();
@@ -197,22 +198,37 @@ class TrayWindowController with TrayListener, WindowListener {
       double targetY = 24.0;
       double computedOffset = windowWidth / 2;
 
+      Display? currentDisplay;
+      try {
+        final displays = await screenRetriever.getAllDisplays();
+        if (trayBounds != null && displays.isNotEmpty) {
+          final trayPoint = Offset(trayBounds.left, trayBounds.top);
+          for (final d in displays) {
+            final pos = d.visiblePosition ?? Offset.zero;
+            final size = d.size;
+            final rect = Rect.fromLTWH(pos.dx, pos.dy, size.width, size.height);
+            if (rect.contains(trayPoint)) {
+              currentDisplay = d;
+              break;
+            }
+          }
+        }
+        currentDisplay ??= await screenRetriever.getPrimaryDisplay();
+      } catch (_) {}
+
       if (trayBounds != null) {
         final trayCenterX = trayBounds.left + (trayBounds.width / 2);
         targetX = trayCenterX - (windowWidth / 2);
         targetY = trayBounds.bottom - 1.0;
 
-        try {
-          final display = await screenRetriever.getPrimaryDisplay();
-          final screenWidth = display.size.width;
-          if (targetX + windowWidth > screenWidth - 10) {
-            targetX = screenWidth - windowWidth - 10;
-          }
-          if (targetX < 10) {
-            targetX = 10;
-          }
-        } catch (_) {
-          // Fallback positioning if screen retrieval fails
+        if (currentDisplay != null) {
+          final displayBounds = currentDisplay.visiblePosition ?? Offset.zero;
+          final displayWidth = currentDisplay.size.width;
+          final minX = displayBounds.dx + 10.0;
+          final maxX = displayBounds.dx + displayWidth - windowWidth - 10.0;
+
+          if (targetX > maxX) targetX = maxX;
+          if (targetX < minX) targetX = minX;
         }
 
         computedOffset = (trayCenterX - targetX).clamp(36.0, windowWidth - 36.0);

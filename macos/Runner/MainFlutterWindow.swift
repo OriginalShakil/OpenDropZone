@@ -19,6 +19,15 @@ class MainFlutterWindow: NSWindow {
     self.titleVisibility = .hidden
     self.titlebarAppearsTransparent = true
 
+    // Multi-Space & Multi-Display Support: follow active space and float over fullscreen apps
+    self.level = .floating
+    self.collectionBehavior = [
+      .canJoinAllSpaces,
+      .fullScreenAuxiliary,
+      .stationary,
+      .ignoresCycle
+    ]
+
     RegisterGeneratedPlugins(registry: flutterViewController)
     TrayDragBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
     StartupBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
