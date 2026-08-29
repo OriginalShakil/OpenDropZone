@@ -23,7 +23,9 @@ class FileListWidget extends StatefulWidget {
 }
 
 class FileListWidgetState extends State<FileListWidget> {
-  static const MethodChannel _dragOutChannel = MethodChannel('dropzone/drag_out');
+  static const MethodChannel _dragOutChannel = MethodChannel(
+    'dropzone/drag_out',
+  );
   static const MethodChannel _iconChannel = MethodChannel('dropzone/file_icon');
   static final Map<String, Uint8List> _iconCache = {};
 
@@ -45,7 +47,9 @@ class FileListWidgetState extends State<FileListWidget> {
         _isNativeDragging = false;
         TrayWindowController.instance.setDraggingOut(false);
         final args = call.arguments as Map?;
-        final draggedPaths = (args?['paths'] as List?)?.cast<String>() ?? _selectedPaths.toList();
+        final draggedPaths =
+            (args?['paths'] as List?)?.cast<String>() ??
+            _selectedPaths.toList();
 
         // Allow brief moment for Finder filesystem move to settle
         Future.delayed(const Duration(milliseconds: 300), () {
@@ -163,10 +167,7 @@ class FileListWidgetState extends State<FileListWidget> {
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontSize: 12),
-        ),
+        content: Text(message, style: const TextStyle(fontSize: 12)),
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -241,7 +242,11 @@ class FileListWidgetState extends State<FileListWidget> {
     return [currentItem];
   }
 
-  void _showContextMenu(BuildContext context, Offset globalPosition, FileItem item) async {
+  void _showContextMenu(
+    BuildContext context,
+    Offset globalPosition,
+    FileItem item,
+  ) async {
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final position = RelativeRect.fromRect(
       Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 0, 0),
@@ -292,9 +297,16 @@ class FileListWidgetState extends State<FileListWidget> {
           height: 32,
           child: Row(
             children: [
-              Icon(Icons.delete_outline_rounded, size: 15, color: Colors.redAccent),
+              Icon(
+                Icons.delete_outline_rounded,
+                size: 15,
+                color: Colors.redAccent,
+              ),
               SizedBox(width: 8),
-              Text('Remove from shelf', style: TextStyle(fontSize: 12, color: Colors.redAccent)),
+              Text(
+                'Remove from shelf',
+                style: TextStyle(fontSize: 12, color: Colors.redAccent),
+              ),
             ],
           ),
         ),
@@ -320,7 +332,8 @@ class FileListWidgetState extends State<FileListWidget> {
 
   // --- Marquee Selection Logic ---
   void _onMarqueeStart(DragStartDetails details) {
-    final gridBox = _gridAreaKey.currentContext?.findRenderObject() as RenderBox?;
+    final gridBox =
+        _gridAreaKey.currentContext?.findRenderObject() as RenderBox?;
     if (gridBox == null) return;
     final localPos = gridBox.globalToLocal(details.globalPosition);
 
@@ -333,7 +346,8 @@ class FileListWidgetState extends State<FileListWidget> {
 
   void _onMarqueeUpdate(DragUpdateDetails details) {
     if (!_isMarqueeActive || _marqueeStart == null) return;
-    final gridBox = _gridAreaKey.currentContext?.findRenderObject() as RenderBox?;
+    final gridBox =
+        _gridAreaKey.currentContext?.findRenderObject() as RenderBox?;
     if (gridBox == null) return;
     final localPos = gridBox.globalToLocal(details.globalPosition);
 
@@ -360,7 +374,10 @@ class FileListWidgetState extends State<FileListWidget> {
       final key = _itemKeys[file.path];
       final itemBox = key?.currentContext?.findRenderObject() as RenderBox?;
       if (itemBox != null && itemBox.attached) {
-        final itemTopLeft = itemBox.localToGlobal(Offset.zero, ancestor: gridBox);
+        final itemTopLeft = itemBox.localToGlobal(
+          Offset.zero,
+          ancestor: gridBox,
+        );
         final itemRect = itemTopLeft & itemBox.size;
         if (marqueeRect.overlaps(itemRect)) {
           newlySelected.add(file.path);
@@ -421,7 +438,8 @@ class FileListWidgetState extends State<FileListWidget> {
                 width: 54,
                 height: 54,
                 filterQuality: FilterQuality.high,
-                errorBuilder: (_, error, stackTrace) => _buildFallbackIcon(item),
+                errorBuilder: (_, error, stackTrace) =>
+                    _buildFallbackIcon(item),
               ),
             ),
           );
@@ -440,11 +458,7 @@ class FileListWidgetState extends State<FileListWidget> {
           color: item.iconColor.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(
-          item.icon,
-          size: 24,
-          color: item.iconColor,
-        ),
+        child: Icon(item.icon, size: 24, color: item.iconColor),
       ),
     );
   }
@@ -510,11 +524,16 @@ class FileListWidgetState extends State<FileListWidget> {
                 TextButton.icon(
                   onPressed: widget.onBrowseFiles,
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                     backgroundColor: isDark
                         ? Colors.white.withValues(alpha: 0.08)
                         : Colors.black.withValues(alpha: 0.05),
-                    foregroundColor: isDark ? Colors.white : const Color(0xFF1D1D1F),
+                    foregroundColor: isDark
+                        ? Colors.white
+                        : const Color(0xFF1D1D1F),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -551,21 +570,24 @@ class FileListWidgetState extends State<FileListWidget> {
                     ? clearSelection
                     : selectAll,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 3,
+                  ),
                   child: Row(
                     children: [
                       Icon(
                         selectedCount == widget.files.length
                             ? Icons.check_box_rounded
                             : (selectedCount > 0
-                                ? Icons.indeterminate_check_box_rounded
-                                : Icons.check_box_outline_blank_rounded),
+                                  ? Icons.indeterminate_check_box_rounded
+                                  : Icons.check_box_outline_blank_rounded),
                         size: 14,
                         color: selectedCount > 0
                             ? const Color(0xFF007AFF)
                             : (isDark
-                                ? Colors.white.withValues(alpha: 0.4)
-                                : Colors.black.withValues(alpha: 0.4)),
+                                  ? Colors.white.withValues(alpha: 0.4)
+                                  : Colors.black.withValues(alpha: 0.4)),
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -578,8 +600,8 @@ class FileListWidgetState extends State<FileListWidget> {
                           color: selectedCount > 0
                               ? const Color(0xFF007AFF)
                               : (isDark
-                                  ? Colors.white.withValues(alpha: 0.4)
-                                  : Colors.black.withValues(alpha: 0.4)),
+                                    ? Colors.white.withValues(alpha: 0.4)
+                                    : Colors.black.withValues(alpha: 0.4)),
                         ),
                       ),
                     ],
@@ -595,7 +617,10 @@ class FileListWidgetState extends State<FileListWidget> {
                   icon: const Icon(Icons.copy_rounded, size: 14),
                   tooltip: 'Copy selected paths',
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                  constraints: const BoxConstraints(
+                    minWidth: 24,
+                    minHeight: 24,
+                  ),
                   color: isDark
                       ? Colors.white.withValues(alpha: 0.6)
                       : Colors.black.withValues(alpha: 0.6),
@@ -604,10 +629,17 @@ class FileListWidgetState extends State<FileListWidget> {
                 const SizedBox(width: 4),
                 // Remove Selected
                 IconButton(
-                  icon: const Icon(Icons.delete_outline_rounded, size: 15, color: Colors.redAccent),
+                  icon: const Icon(
+                    Icons.delete_outline_rounded,
+                    size: 15,
+                    color: Colors.redAccent,
+                  ),
                   tooltip: 'Remove selected from shelf',
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                  constraints: const BoxConstraints(
+                    minWidth: 24,
+                    minHeight: 24,
+                  ),
                   onPressed: _removeSelected,
                 ),
               ],
@@ -628,7 +660,10 @@ class FileListWidgetState extends State<FileListWidget> {
               child: MouseRegion(
                 cursor: SystemMouseCursors.grab,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
@@ -678,7 +713,10 @@ class FileListWidgetState extends State<FileListWidget> {
               children: [
                 // Grid of icons
                 GridView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 4,
                     crossAxisSpacing: 10,
@@ -692,7 +730,10 @@ class FileListWidgetState extends State<FileListWidget> {
                     final itemsToDrag = _getItemsForDrag(item);
 
                     // Maintain GlobalKey for intersection testing
-                    final itemKey = _itemKeys.putIfAbsent(item.path, () => GlobalKey());
+                    final itemKey = _itemKeys.putIfAbsent(
+                      item.path,
+                      () => GlobalKey(),
+                    );
 
                     return KeyedSubtree(
                       key: itemKey,
@@ -701,13 +742,18 @@ class FileListWidgetState extends State<FileListWidget> {
                         waitDuration: const Duration(milliseconds: 350),
                         child: Listener(
                           onPointerMove: (event) {
-                            if (!_isMarqueeActive && event.buttons == 1 && event.delta.distance > 2.5) {
+                            if (!_isMarqueeActive &&
+                                event.buttons == 1 &&
+                                event.delta.distance > 2.5) {
                               _startNativeDrag(itemsToDrag);
                             }
                           },
                           child: GestureDetector(
-                            onSecondaryTapUp: (details) =>
-                                _showContextMenu(context, details.globalPosition, item),
+                            onSecondaryTapUp: (details) => _showContextMenu(
+                              context,
+                              details.globalPosition,
+                              item,
+                            ),
                             child: MouseRegion(
                               cursor: SystemMouseCursors.grab,
                               child: InkWell(
@@ -717,23 +763,35 @@ class FileListWidgetState extends State<FileListWidget> {
                                   duration: const Duration(milliseconds: 180),
                                   decoration: BoxDecoration(
                                     color: isSelected
-                                        ? const Color(0xFF007AFF).withValues(alpha: 0.16)
+                                        ? const Color(
+                                            0xFF007AFF,
+                                          ).withValues(alpha: 0.16)
                                         : (isDark
-                                            ? Colors.white.withValues(alpha: 0.05)
-                                            : Colors.black.withValues(alpha: 0.03)),
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.05,
+                                                )
+                                              : Colors.black.withValues(
+                                                  alpha: 0.03,
+                                                )),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: isSelected
                                           ? const Color(0xFF007AFF)
                                           : (isDark
-                                              ? Colors.white.withValues(alpha: 0.08)
-                                              : Colors.black.withValues(alpha: 0.06)),
+                                                ? Colors.white.withValues(
+                                                    alpha: 0.08,
+                                                  )
+                                                : Colors.black.withValues(
+                                                    alpha: 0.06,
+                                                  )),
                                       width: isSelected ? 1.5 : 1.0,
                                     ),
                                     boxShadow: isSelected
                                         ? [
                                             BoxShadow(
-                                              color: const Color(0xFF007AFF).withValues(alpha: 0.25),
+                                              color: const Color(
+                                                0xFF007AFF,
+                                              ).withValues(alpha: 0.25),
                                               blurRadius: 8,
                                               offset: const Offset(0, 2),
                                             ),
@@ -741,30 +799,62 @@ class FileListWidgetState extends State<FileListWidget> {
                                         : null,
                                   ),
                                   padding: const EdgeInsets.all(6),
-                                  child: Stack(
+                                  child: Column(
                                     children: [
                                       // Native Finder App / File Icon Preview
-                                      Positioned.fill(
-                                        child: _buildNativeIconPreview(item, isDark),
+                                      Expanded(
+                                        child: Stack(
+                                          children: [
+                                            Positioned.fill(
+                                              child: _buildNativeIconPreview(
+                                                item,
+                                                isDark,
+                                              ),
+                                            ),
+
+                                            // Selection Indicator Checkmark in top-right corner
+                                            if (isSelected)
+                                              Positioned(
+                                                top: 0,
+                                                right: 0,
+                                                child: Container(
+                                                  decoration:
+                                                      const BoxDecoration(
+                                                        shape: BoxShape.circle,
+                                                        color: Color(
+                                                          0xFF007AFF,
+                                                        ),
+                                                      ),
+                                                  child: const Icon(
+                                                    Icons.check_rounded,
+                                                    size: 13,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
                                       ),
 
-                                      // Selection Indicator Checkmark in top-right corner
-                                      if (isSelected)
-                                        Positioned(
-                                          top: 0,
-                                          right: 0,
-                                          child: Container(
-                                            decoration: const BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              color: Color(0xFF007AFF),
-                                            ),
-                                            child: const Icon(
-                                              Icons.check_rounded,
-                                              size: 13,
-                                              color: Colors.white,
-                                            ),
-                                          ),
+                                      // File name title
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        item.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w500,
+                                          color: isDark
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.85,
+                                                )
+                                              : Colors.black.withValues(
+                                                  alpha: 0.75,
+                                                ),
                                         ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -778,15 +868,21 @@ class FileListWidgetState extends State<FileListWidget> {
                 ),
 
                 // Rubber-Band Marquee Selection Box Overlay
-                if (_isMarqueeActive && _marqueeStart != null && _marqueeCurrent != null)
+                if (_isMarqueeActive &&
+                    _marqueeStart != null &&
+                    _marqueeCurrent != null)
                   Positioned.fromRect(
                     rect: Rect.fromPoints(_marqueeStart!, _marqueeCurrent!),
                     child: IgnorePointer(
                       child: Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFF007AFF).withValues(alpha: 0.16),
+                          color: const Color(
+                            0xFF007AFF,
+                          ).withValues(alpha: 0.16),
                           border: Border.all(
-                            color: const Color(0xFF007AFF).withValues(alpha: 0.85),
+                            color: const Color(
+                              0xFF007AFF,
+                            ).withValues(alpha: 0.85),
                             width: 1.0,
                           ),
                           borderRadius: BorderRadius.circular(3),
