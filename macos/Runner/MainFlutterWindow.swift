@@ -34,6 +34,7 @@ class MainFlutterWindow: NSWindow {
     NativeDragOutBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger, window: self)
     FileIconBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
     HotKeyBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
+    MouseShakeBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
 
     super.awakeFromNib()
   }
@@ -644,3 +645,105 @@ extension NSStatusBarButton {
     return false
   }
 }
+
+class MouseShakeBridge: NSObject {
+  static let shared = MouseShakeBridge()
+  private var channel: FlutterMethodChannel?
+  private var monitor: Any?
+  private var isMonitoring = false
+  private var updateTimer: Timer?
+  private var dragMonitor: Any?
+
+  func setup(messenger: FlutterBinaryMessenger) {
+    channel = FlutterMethodChannel(name: "dropzone/mouse_shake", binaryMessenger: messenger)
+    channel?.setMethodCallHandler { [weak self] (call, result) in
+      guard let self = self else { return }
+      if call.method == "startMonitoring" {
+        print("🎯 MouseShakeBridge: Starting monitoring")
+        self.startMonitoring()
+        result(true)
+      } else if call.method == "stopMonitoring" {
+        print("🛑 MouseShakeBridge: Stopping monitoring")
+        self.stopMonitoring()
+        result(true)
+      } else if call.method == "startGlobalDragMonitoring" {
+        print("🌍 MouseShakeBridge: Starting global drag monitoring")
+        self.startGlobalDragMonitoring()
+        result(true)
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    
+    // Auto-start global drag monitoring on setup
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+      self.startGlobalDragMonitoring()
+    }
+  }
+  
+  func startGlobalDragMonitoring() {
+    // Monitor for any drag operation starting (left mouse down + movement)
+    dragMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDragged]) { [weak self] event in
+      guard let self = self else { return }
+      if !self.isMonitoring {
+        print("🔍 MouseShakeBridge: Global drag detected, starting shake monitoring")
+        self.startMonitoring()
+      }
+    }
+    
+    // Also monitor for mouse up to stop monitoring
+    NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp]) { [weak self] _ in
+      guard let self = self else { return }
+      if self.isMonitoring {
+        print("🔍 MouseShakeBridge: Mouse released, stopping monitoring")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+          self.stopMonitoring()
+        }
+      }
+    }
+    
+    print("✅ MouseShakeBridge: Global drag monitoring active")
+  }
+
+  func startMonitoring() {
+    guard !isMonitoring else { return }
+    isMonitoring = true
+
+    print("🎬 MouseShakeBridge: Setting up timer with 0.05s interval")
+    
+    // Monitor global mouse movements using a timer for more reliable tracking during drag
+    updateTimer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
+      guard let self = self, self.isMonitoring else { return }
+      let location = NSEvent.mouseLocation
+      
+      DispatchQueue.main.async {
+        self.channel?.invokeMethod("onMouseMoved", arguments: [
+          "x": location.x,
+          "y": location.y
+        ])
+      }
+    }
+    
+    // Add timer to RunLoop so it fires even during drag operations
+    RunLoop.main.add(updateTimer!, forMode: .common)
+    
+    print("✅ MouseShakeBridge: Timer-based monitoring active, timer created: \(updateTimer != nil)")
+  }
+
+  func stopMonitoring() {
+    guard isMonitoring else { return }
+    isMonitoring = false
+
+    updateTimer?.invalidate()
+    updateTimer = nil
+
+    if let monitor = monitor {
+      NSEvent.removeMonitor(monitor)
+      self.monitor = nil
+    }
+    
+    channel?.invokeMethod("onDragEnded", arguments: nil)
+    print("✅ MouseShakeBridge: Monitoring stopped")
+  }
+}
+

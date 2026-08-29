@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/file_item.dart';
 import '../services/tray_window_controller.dart';
+import '../services/mouse_shake_detector.dart';
 
 class FileListWidget extends StatefulWidget {
   final List<FileItem> files;
@@ -46,6 +47,10 @@ class FileListWidgetState extends State<FileListWidget> {
       if (call.method == 'onDragEnded') {
         _isNativeDragging = false;
         TrayWindowController.instance.setDraggingOut(false);
+
+        // Stop mouse shake detection when drag ends
+        MouseShakeDetector.instance.stopMonitoring();
+
         final args = call.arguments as Map?;
         final draggedPaths =
             (args?['paths'] as List?)?.cast<String>() ??
@@ -126,8 +131,18 @@ class FileListWidgetState extends State<FileListWidget> {
     final validPaths = items.where((f) => f.exists).map((f) => f.path).toList();
     if (validPaths.isEmpty) return;
 
+    debugPrint('🚀 Starting native drag with ${validPaths.length} file(s)');
+
     _isNativeDragging = true;
     TrayWindowController.instance.setDraggingOut(true);
+
+    // Start mouse shake detection
+    MouseShakeDetector.instance.onShakeDetected = () {
+      debugPrint('🎊 Shake detected callback! Opening window...');
+      // Open the popup when shake is detected
+      TrayWindowController.instance.showWindow();
+    };
+    await MouseShakeDetector.instance.startMonitoring();
 
     try {
       await _dragOutChannel.invokeMethod('startDraggingFiles', {
@@ -137,6 +152,7 @@ class FileListWidgetState extends State<FileListWidget> {
       debugPrint('Native drag error: $e');
       _isNativeDragging = false;
       TrayWindowController.instance.setDraggingOut(false);
+      MouseShakeDetector.instance.stopMonitoring();
     }
   }
 
@@ -653,6 +669,13 @@ class FileListWidgetState extends State<FileListWidget> {
             margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
             child: Listener(
               onPointerMove: (event) {
+                // Track mouse position for shake detection
+                if (_isNativeDragging) {
+                  MouseShakeDetector.instance.updateMousePosition(
+                    event.position,
+                  );
+                }
+
                 if (event.buttons == 1 && event.delta.distance > 2.0) {
                   _startNativeDrag(selectedFiles);
                 }
@@ -742,6 +765,13 @@ class FileListWidgetState extends State<FileListWidget> {
                         waitDuration: const Duration(milliseconds: 350),
                         child: Listener(
                           onPointerMove: (event) {
+                            // Track mouse position for shake detection
+                            if (_isNativeDragging) {
+                              MouseShakeDetector.instance.updateMousePosition(
+                                event.position,
+                              );
+                            }
+
                             if (!_isMarqueeActive &&
                                 event.buttons == 1 &&
                                 event.delta.distance > 2.5) {

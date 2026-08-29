@@ -9,6 +9,7 @@ import 'models/file_item.dart';
 import 'services/shortcut_service.dart';
 import 'services/startup_service.dart';
 import 'services/tray_window_controller.dart';
+import 'services/mouse_shake_detector.dart';
 import 'widgets/file_list_widget.dart';
 import 'widgets/header_bar.dart';
 import 'widgets/popover_container.dart';
@@ -21,9 +22,18 @@ void main() async {
   await windowManager.ensureInitialized();
 
   const windowOptions = WindowOptions(
-    size: Size(TrayWindowController.windowWidth, TrayWindowController.windowHeight),
-    minimumSize: Size(TrayWindowController.windowWidth, TrayWindowController.windowHeight),
-    maximumSize: Size(TrayWindowController.windowWidth, TrayWindowController.windowHeight),
+    size: Size(
+      TrayWindowController.windowWidth,
+      TrayWindowController.windowHeight,
+    ),
+    minimumSize: Size(
+      TrayWindowController.windowWidth,
+      TrayWindowController.windowHeight,
+    ),
+    maximumSize: Size(
+      TrayWindowController.windowWidth,
+      TrayWindowController.windowHeight,
+    ),
     center: false,
     backgroundColor: Colors.transparent,
     skipTaskbar: true,
@@ -42,6 +52,7 @@ void main() async {
   await StartupService.instance.init();
   await TrayWindowController.instance.init();
   await ShortcutService.instance.init();
+  await MouseShakeDetector.instance.init();
 
   runApp(const DropzoneApp());
 }
@@ -83,7 +94,8 @@ class DropzoneHome extends StatefulWidget {
 
 class _DropzoneHomeState extends State<DropzoneHome>
     with SingleTickerProviderStateMixin {
-  final GlobalKey<FileListWidgetState> _fileListKey = GlobalKey<FileListWidgetState>();
+  final GlobalKey<FileListWidgetState> _fileListKey =
+      GlobalKey<FileListWidgetState>();
   final List<FileItem> _files = [];
   Timer? _cleanupTimer;
   double _arrowOffset = TrayWindowController.windowWidth / 2;
@@ -121,16 +133,17 @@ class _DropzoneHomeState extends State<DropzoneHome>
       ),
     );
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0.0, -0.04),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _openAnimController,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      ),
-    );
+    _slideAnimation =
+        Tween<Offset>(
+          begin: const Offset(0.0, -0.04),
+          end: Offset.zero,
+        ).animate(
+          CurvedAnimation(
+            parent: _openAnimController,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          ),
+        );
 
     _openAnimController.value = 1.0;
 
@@ -252,10 +265,8 @@ class _DropzoneHomeState extends State<DropzoneHome>
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => SettingsSheet(
-        onClearAll: _onClearAll,
-        fileCount: _files.length,
-      ),
+      builder: (ctx) =>
+          SettingsSheet(onClearAll: _onClearAll, fileCount: _files.length),
     );
 
     if (mounted) {
@@ -294,7 +305,8 @@ class _DropzoneHomeState extends State<DropzoneHome>
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final anchorFractionX = (_arrowOffset / TrayWindowController.windowWidth).clamp(0.05, 0.95);
+    final anchorFractionX = (_arrowOffset / TrayWindowController.windowWidth)
+        .clamp(0.05, 0.95);
     final alignmentX = anchorFractionX * 2.0 - 1.0;
 
     final fillColor = isDark
@@ -304,8 +316,8 @@ class _DropzoneHomeState extends State<DropzoneHome>
     final borderColor = _isDragOverPopup
         ? const Color(0xFF007AFF)
         : (isDark
-            ? Colors.white.withValues(alpha: 0.18)
-            : Colors.black.withValues(alpha: 0.14));
+              ? Colors.white.withValues(alpha: 0.18)
+              : Colors.black.withValues(alpha: 0.14));
 
     return CallbackShortcuts(
       bindings: {
@@ -418,27 +430,43 @@ class _DropzoneHomeState extends State<DropzoneHome>
                                   child: IgnorePointer(
                                     child: Container(
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF007AFF).withValues(alpha: 0.16),
+                                        color: const Color(
+                                          0xFF007AFF,
+                                        ).withValues(alpha: 0.16),
                                       ),
                                       child: BackdropFilter(
-                                        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                                        filter: ImageFilter.blur(
+                                          sigmaX: 4,
+                                          sigmaY: 4,
+                                        ),
                                         child: Center(
                                           child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 20,
+                                              vertical: 14,
+                                            ),
                                             decoration: BoxDecoration(
                                               color: isDark
-                                                  ? const Color(0xFF1E1E1E).withValues(alpha: 0.94)
-                                                  : Colors.white.withValues(alpha: 0.96),
-                                              borderRadius: BorderRadius.circular(16),
+                                                  ? const Color(
+                                                      0xFF1E1E1E,
+                                                    ).withValues(alpha: 0.94)
+                                                  : Colors.white.withValues(
+                                                      alpha: 0.96,
+                                                    ),
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: Colors.black.withValues(alpha: 0.25),
+                                                  color: Colors.black
+                                                      .withValues(alpha: 0.25),
                                                   blurRadius: 20,
                                                   offset: const Offset(0, 6),
                                                 ),
                                               ],
                                               border: Border.all(
-                                                color: const Color(0xFF007AFF).withValues(alpha: 0.5),
+                                                color: const Color(
+                                                  0xFF007AFF,
+                                                ).withValues(alpha: 0.5),
                                                 width: 1.5,
                                               ),
                                             ),
@@ -456,7 +484,11 @@ class _DropzoneHomeState extends State<DropzoneHome>
                                                   style: TextStyle(
                                                     fontWeight: FontWeight.w700,
                                                     fontSize: 13,
-                                                    color: isDark ? Colors.white : const Color(0xFF1D1D1F),
+                                                    color: isDark
+                                                        ? Colors.white
+                                                        : const Color(
+                                                            0xFF1D1D1F,
+                                                          ),
                                                   ),
                                                 ),
                                               ],
