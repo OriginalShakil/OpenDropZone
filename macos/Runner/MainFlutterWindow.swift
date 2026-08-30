@@ -574,7 +574,14 @@ class TrayDragBridge: NSObject {
   func scanAndRegisterStatusBarButtons() {
     for window in NSApp.windows {
       if let button = findStatusBarButton(in: window.contentView) {
-        button.registerForDraggedTypes([.fileURL])
+        // Register for multiple drag types to support VS Code and other apps
+        button.registerForDraggedTypes([
+          .fileURL,
+          NSPasteboard.PasteboardType("public.file-url"),
+          NSPasteboard.PasteboardType("public.url"),
+          .string,
+          .init("NSFilenamesPboardType")
+        ])
       }
     }
   }
@@ -615,7 +622,14 @@ class TrayDragBridge: NSObject {
 extension NSStatusBarButton {
   open override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
-    self.registerForDraggedTypes([.fileURL])
+    // Register for multiple drag types to support VS Code and other apps
+    self.registerForDraggedTypes([
+      .fileURL,
+      NSPasteboard.PasteboardType("public.file-url"),
+      NSPasteboard.PasteboardType("public.url"),
+      .string,
+      .init("NSFilenamesPboardType")
+    ])
   }
 
   open override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool {
@@ -637,11 +651,56 @@ extension NSStatusBarButton {
 
   open override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
     let pasteboard = sender.draggingPasteboard
+    var paths: [String] = []
+    
+    // Try multiple strategies to extract file paths
+    
+    // Strategy 1: Standard NSURL objects
     if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
-      let paths = urls.map { $0.path }
+      paths.append(contentsOf: urls.map { $0.path })
+    }
+    
+    // Strategy 2: NSFilenamesPboardType (legacy but still used by some apps)
+    if paths.isEmpty,
+       let filenames = pasteboard.propertyList(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")) as? [String] {
+      paths.append(contentsOf: filenames)
+    }
+    
+    // Strategy 3: File URL strings
+    if paths.isEmpty,
+       let string = pasteboard.string(forType: .string) {
+      let lines = string.components(separatedBy: .newlines)
+      for line in lines {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("file://"), let url = URL(string: trimmed) {
+          paths.append(url.path)
+        } else if trimmed.hasPrefix("/") && FileManager.default.fileExists(atPath: trimmed) {
+          paths.append(trimmed)
+        }
+      }
+    }
+    
+    // Strategy 4: Check all available types and try to decode
+    if paths.isEmpty {
+      for type in pasteboard.types ?? [] {
+        if let data = pasteboard.data(forType: type),
+           let string = String(data: data, encoding: .utf8) {
+          // Try to parse as file path
+          let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+          if trimmed.hasPrefix("/") && FileManager.default.fileExists(atPath: trimmed) {
+            paths.append(trimmed)
+          } else if trimmed.hasPrefix("file://"), let url = URL(string: trimmed) {
+            paths.append(url.path)
+          }
+        }
+      }
+    }
+    
+    if !paths.isEmpty {
       TrayDragBridge.shared.handleFilesDropped(paths: paths)
       return true
     }
+    
     return false
   }
 }
@@ -650,9 +709,11 @@ class MouseShakeBridge: NSObject {
   static let shared = MouseShakeBridge()
   private var channel: FlutterMethodChannel?
   private var monitor: Any?
+  private var localMonitor: Any?
   private var isMonitoring = false
   private var updateTimer: Timer?
   private var dragMonitor: Any?
+  private var localDragMonitor: Any?
 
   func setup(messenger: FlutterBinaryMessenger) {
     channel = FlutterMethodChannel(name: "dropzone/mouse_shake", binaryMessenger: messenger)
@@ -670,6 +731,11 @@ class MouseShakeBridge: NSObject {
         print("🌍 MouseShakeBridge: Starting global drag monitoring")
         self.startGlobalDragMonitoring()
         result(true)
+      } else if call.method == "checkAccessibilityPermission" {
+        result(self.checkAccessibilityPermission())
+      } else if call.method == "requestAccessibilityPermission" {
+        self.requestAccessibilityPermission()
+        result(true)
       } else {
         result(FlutterMethodNotImplemented)
       }
@@ -681,7 +747,34 @@ class MouseShakeBridge: NSObject {
     }
   }
   
+  func checkAccessibilityPermission() -> Bool {
+    return AXIsProcessTrusted()
+  }
+  
+  func requestAccessibilityPermission() {
+    let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
+    AXIsProcessTrustedWithOptions(options)
+  }
+  
   func startGlobalDragMonitoring() {
+    // Check if we have accessibility permissions for better drag detection
+    let hasAccessibility = AXIsProcessTrusted()
+    
+    if hasAccessibility {
+      print("✅ MouseShakeBridge: Accessibility enabled, using local event monitoring")
+      // With accessibility, we can monitor local events from other apps
+      localDragMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDragged]) { [weak self] event in
+        guard let self = self else { return event }
+        if !self.isMonitoring {
+          print("🔍 MouseShakeBridge: Local drag detected, starting shake monitoring")
+          self.startMonitoring()
+        }
+        return event
+      }
+    } else {
+      print("⚠️ MouseShakeBridge: No accessibility permission, limited drag detection")
+    }
+    
     // Monitor for any drag operation starting (left mouse down + movement)
     dragMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDragged]) { [weak self] event in
       guard let self = self else { return }
@@ -702,7 +795,7 @@ class MouseShakeBridge: NSObject {
       }
     }
     
-    print("✅ MouseShakeBridge: Global drag monitoring active")
+    print("✅ MouseShakeBridge: Global drag monitoring active (accessibility: \(hasAccessibility))")
   }
 
   func startMonitoring() {
@@ -740,6 +833,11 @@ class MouseShakeBridge: NSObject {
     if let monitor = monitor {
       NSEvent.removeMonitor(monitor)
       self.monitor = nil
+    }
+    
+    if let localMon = localMonitor {
+      NSEvent.removeMonitor(localMon)
+      self.localMonitor = nil
     }
     
     channel?.invokeMethod("onDragEnded", arguments: nil)

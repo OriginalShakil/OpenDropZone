@@ -42,12 +42,54 @@ class MouseShakeDetector {
         TrayWindowController.instance.showWindow();
       };
 
+      // Check accessibility permission status
+      final hasPermission = await checkAccessibilityPermission();
+      if (!hasPermission) {
+        debugPrint(
+          '⚠️ MouseShakeDetector: No accessibility permission. Drag detection from VS Code and other apps will be limited.',
+        );
+        debugPrint(
+          '💡 Call requestAccessibilityPermission() to prompt the user.',
+        );
+      }
+
       // Start global drag monitoring - detects ANY drag operation system-wide
       await _channel.invokeMethod('startGlobalDragMonitoring');
-      debugPrint('🌍 MouseShakeDetector: Global drag monitoring enabled');
+      debugPrint(
+        '🌍 MouseShakeDetector: Global drag monitoring enabled (accessibility: $hasPermission)',
+      );
     } catch (e) {
       debugPrint('⚠️ MouseShakeDetector: Platform channel setup failed: $e');
       // Platform-specific channel might not be available
+    }
+  }
+
+  /// Check if the app has accessibility permission
+  Future<bool> checkAccessibilityPermission() async {
+    try {
+      final result = await _channel.invokeMethod<bool>(
+        'checkAccessibilityPermission',
+      );
+      return result ?? false;
+    } catch (e) {
+      debugPrint(
+        '⚠️ MouseShakeDetector: Failed to check accessibility permission: $e',
+      );
+      return false;
+    }
+  }
+
+  /// Request accessibility permission from the user
+  Future<void> requestAccessibilityPermission() async {
+    try {
+      await _channel.invokeMethod('requestAccessibilityPermission');
+      debugPrint(
+        '🔐 MouseShakeDetector: Accessibility permission dialog shown',
+      );
+    } catch (e) {
+      debugPrint(
+        '⚠️ MouseShakeDetector: Failed to request accessibility permission: $e',
+      );
     }
   }
 

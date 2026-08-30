@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/shortcut_service.dart';
 import '../services/startup_service.dart';
 import '../services/tray_window_controller.dart';
+import '../services/mouse_shake_detector.dart';
 import 'shortcut_recorder_widget.dart';
 
 class SettingsSheet extends StatefulWidget {
@@ -21,10 +22,12 @@ class SettingsSheet extends StatefulWidget {
 
 class _SettingsSheetState extends State<SettingsSheet> {
   bool _launchAtStartup = false;
+  bool _hasAccessibilityPermission = false;
   bool _isLoading = true;
 
   ShortcutModel _openPopupShortcut = ShortcutService.instance.openPopupShortcut;
-  ShortcutModel _addSelectionShortcut = ShortcutService.instance.addSelectionShortcut;
+  ShortcutModel _addSelectionShortcut =
+      ShortcutService.instance.addSelectionShortcut;
 
   @override
   void initState() {
@@ -34,9 +37,12 @@ class _SettingsSheetState extends State<SettingsSheet> {
 
   Future<void> _loadSettings() async {
     final isEnabled = await StartupService.instance.isEnabled();
+    final hasPermission = await MouseShakeDetector.instance
+        .checkAccessibilityPermission();
     if (mounted) {
       setState(() {
         _launchAtStartup = isEnabled;
+        _hasAccessibilityPermission = hasPermission;
         _openPopupShortcut = ShortcutService.instance.openPopupShortcut;
         _addSelectionShortcut = ShortcutService.instance.addSelectionShortcut;
         _isLoading = false;
@@ -215,8 +221,9 @@ class _SettingsSheetState extends State<SettingsSheet> {
                             style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
-                              color:
-                                  isDark ? Colors.white : const Color(0xFF1D1D1F),
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF1D1D1F),
                             ),
                           ),
                           Text(
@@ -251,6 +258,78 @@ class _SettingsSheetState extends State<SettingsSheet> {
             ),
             const SizedBox(height: 10),
 
+            // Accessibility Permission Section (only show if not granted)
+            if (!_hasAccessibilityPermission) ...[
+              InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () async {
+                  await MouseShakeDetector.instance
+                      .requestAccessibilityPermission();
+                  // Reload settings after a delay to check if permission was granted
+                  await Future.delayed(const Duration(seconds: 2));
+                  _loadSettings();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF8E1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFFFFB74D),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.accessibility_new_rounded,
+                        size: 20,
+                        color: Color(0xFFFF9800),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Enable VS Code Drag Detection',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF1D1D1F),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Grant accessibility permission to detect drags from VS Code and other apps',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.7)
+                                    : Colors.black.withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 14,
+                        color: Color(0xFFFF9800),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+
             // Clear history button
             if (widget.fileCount > 0) ...[
               InkWell(
@@ -260,8 +339,10 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   Navigator.of(context).pop();
                 },
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: isDark
                         ? Colors.white.withValues(alpha: 0.05)
@@ -316,8 +397,10 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   },
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.redAccent,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     visualDensity: VisualDensity.compact,
                   ),
                   icon: const Icon(Icons.exit_to_app_rounded, size: 14),
