@@ -4,6 +4,7 @@ import '../services/shortcut_service.dart';
 import '../services/startup_service.dart';
 import '../services/tray_window_controller.dart';
 import '../services/mouse_shake_detector.dart';
+import '../services/preferences_service.dart';
 import 'shortcut_recorder_widget.dart';
 
 class SettingsSheet extends StatefulWidget {
@@ -22,7 +23,8 @@ class SettingsSheet extends StatefulWidget {
 
 class _SettingsSheetState extends State<SettingsSheet> {
   bool _launchAtStartup = false;
-  bool _hasAccessibilityPermission = false;
+  bool _removeAfterDragOut = false;
+  double _shakeDurationSeconds = 1.0;
   bool _isLoading = true;
 
   ShortcutModel _openPopupShortcut = ShortcutService.instance.openPopupShortcut;
@@ -37,12 +39,16 @@ class _SettingsSheetState extends State<SettingsSheet> {
 
   Future<void> _loadSettings() async {
     final isEnabled = await StartupService.instance.isEnabled();
-    final hasPermission = await MouseShakeDetector.instance
-        .checkAccessibilityPermission();
+    final removeAfterDragOut = await PreferencesService.instance
+        .getRemoveAfterDragOut();
+    final shakeDuration = await PreferencesService.instance
+        .getShakeDurationSeconds();
+
     if (mounted) {
       setState(() {
         _launchAtStartup = isEnabled;
-        _hasAccessibilityPermission = hasPermission;
+        _removeAfterDragOut = removeAfterDragOut;
+        _shakeDurationSeconds = shakeDuration;
         _openPopupShortcut = ShortcutService.instance.openPopupShortcut;
         _addSelectionShortcut = ShortcutService.instance.addSelectionShortcut;
         _isLoading = false;
@@ -55,6 +61,20 @@ class _SettingsSheetState extends State<SettingsSheet> {
       _launchAtStartup = value;
     });
     await StartupService.instance.setEnabled(value);
+  }
+
+  Future<void> _toggleRemoveAfterDragOut(bool value) async {
+    setState(() {
+      _removeAfterDragOut = value;
+    });
+    await PreferencesService.instance.setRemoveAfterDragOut(value);
+  }
+
+  Future<void> _updateShakeDuration(double value) async {
+    setState(() {
+      _shakeDurationSeconds = value;
+    });
+    await MouseShakeDetector.instance.updateShakeDuration(value);
   }
 
   Future<void> _updateOpenPopupShortcut(ShortcutModel shortcut) async {
@@ -83,6 +103,20 @@ class _SettingsSheetState extends State<SettingsSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    final cardBgColor = isDark
+        ? Colors.white.withValues(alpha: 0.05)
+        : Colors.black.withValues(alpha: 0.03);
+
+    final cardBorderColor = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.06);
+
+    final cardDecoration = BoxDecoration(
+      color: cardBgColor,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: cardBorderColor),
+    );
 
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
@@ -133,17 +167,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
 
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.05)
-                    : Colors.black.withValues(alpha: 0.03),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.black.withValues(alpha: 0.06),
-                ),
-              ),
+              decoration: cardDecoration,
               child: Column(
                 children: [
                   // 1. Open Dropzone Popup
@@ -191,17 +215,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
 
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.05)
-                    : Colors.black.withValues(alpha: 0.03),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.black.withValues(alpha: 0.06),
-                ),
-              ),
+              decoration: cardDecoration,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -256,38 +270,79 @@ class _SettingsSheetState extends State<SettingsSheet> {
                 ],
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
 
-            // Accessibility Permission Section (only show if not granted)
-            if (!_hasAccessibilityPermission) ...[
-              InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: () async {
-                  await MouseShakeDetector.instance
-                      .requestAccessibilityPermission();
-                  // Reload settings after a delay to check if permission was granted
-                  await Future.delayed(const Duration(seconds: 2));
-                  _loadSettings();
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF8E1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: const Color(0xFFFFB74D),
-                      width: 1.5,
+            // Remove items after drag-out
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: cardDecoration,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.auto_delete_rounded,
+                          size: 18,
+                          color: Color(0xFF007AFF),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Remove After Drag-Out',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? Colors.white
+                                      : const Color(0xFF1D1D1F),
+                                ),
+                              ),
+                              Text(
+                                'Auto-remove items when dragged out',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.45)
+                                      : Colors.black.withValues(alpha: 0.45),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  child: Row(
+                  Transform.scale(
+                    scale: 0.8,
+                    child: Switch.adaptive(
+                      value: _removeAfterDragOut,
+                      activeTrackColor: const Color(0xFF007AFF),
+                      onChanged: _toggleRemoveAfterDragOut,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Shake duration slider
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: cardDecoration,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
                       const Icon(
-                        Icons.accessibility_new_rounded,
-                        size: 20,
-                        color: Color(0xFFFF9800),
+                        Icons.vibration_rounded,
+                        size: 18,
+                        color: Color(0xFF007AFF),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -295,7 +350,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Enable VS Code Drag Detection',
+                              'Shake Duration: ${_shakeDurationSeconds.toStringAsFixed(1)}s',
                               style: TextStyle(
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w600,
@@ -304,31 +359,57 @@ class _SettingsSheetState extends State<SettingsSheet> {
                                     : const Color(0xFF1D1D1F),
                               ),
                             ),
-                            const SizedBox(height: 2),
                             Text(
-                              'Grant accessibility permission to detect drags from VS Code and other apps',
+                              'How long to shake to open popup',
                               style: TextStyle(
                                 fontSize: 10.5,
                                 color: isDark
-                                    ? Colors.white.withValues(alpha: 0.7)
-                                    : Colors.black.withValues(alpha: 0.6),
+                                    ? Colors.white.withValues(alpha: 0.45)
+                                    : Colors.black.withValues(alpha: 0.45),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      const Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        size: 14,
-                        color: Color(0xFFFF9800),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        '0.1s',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.4)
+                              : Colors.black.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      Expanded(
+                        child: Slider(
+                          value: _shakeDurationSeconds.clamp(0.1, 3.0),
+                          min: 0.1,
+                          max: 3.0,
+                          divisions: 29,
+                          activeColor: const Color(0xFF007AFF),
+                          onChanged: _updateShakeDuration,
+                        ),
+                      ),
+                      Text(
+                        '3.0s',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.4)
+                              : Colors.black.withValues(alpha: 0.4),
+                        ),
                       ),
                     ],
                   ),
-                ),
+                ],
               ),
-              const SizedBox(height: 10),
-            ],
+            ),
+            const SizedBox(height: 10),
 
             // Clear history button
             if (widget.fileCount > 0) ...[
@@ -343,17 +424,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
                     horizontal: 12,
                     vertical: 10,
                   ),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.05)
-                        : Colors.black.withValues(alpha: 0.03),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.08)
-                          : Colors.black.withValues(alpha: 0.06),
-                    ),
-                  ),
+                  decoration: cardDecoration,
                   child: Row(
                     children: [
                       const Icon(

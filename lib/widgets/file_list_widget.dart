@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/file_item.dart';
 import '../services/tray_window_controller.dart';
 import '../services/mouse_shake_detector.dart';
+import '../services/preferences_service.dart';
 
 class FileListWidget extends StatefulWidget {
   final List<FileItem> files;
@@ -56,12 +57,20 @@ class FileListWidgetState extends State<FileListWidget> {
             (args?['paths'] as List?)?.cast<String>() ??
             _selectedPaths.toList();
 
+        // Check if user wants to remove items after drag-out
+        final removeAfterDragOut = await PreferencesService.instance
+            .getRemoveAfterDragOut();
+
         // Allow brief moment for Finder filesystem move to settle
         Future.delayed(const Duration(milliseconds: 300), () {
           if (mounted) {
             setState(() {
               for (final path in draggedPaths) {
-                if (!File(path).existsSync() && !Directory(path).existsSync()) {
+                final fileExists =
+                    File(path).existsSync() || Directory(path).existsSync();
+
+                // Remove if: file no longer exists OR user preference is enabled
+                if (!fileExists || removeAfterDragOut) {
                   widget.files.removeWhere((f) => f.path == path);
                   _selectedPaths.remove(path);
                   _iconCache.remove(path);

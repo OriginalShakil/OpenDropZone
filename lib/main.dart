@@ -10,6 +10,7 @@ import 'services/shortcut_service.dart';
 import 'services/startup_service.dart';
 import 'services/tray_window_controller.dart';
 import 'services/mouse_shake_detector.dart';
+import 'services/preferences_service.dart';
 import 'widgets/file_list_widget.dart';
 import 'widgets/header_bar.dart';
 import 'widgets/popover_container.dart';
@@ -49,6 +50,7 @@ void main() async {
   });
 
   // Initialize Services
+  await PreferencesService.instance.init();
   await StartupService.instance.init();
   await TrayWindowController.instance.init();
   await ShortcutService.instance.init();

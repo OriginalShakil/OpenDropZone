@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'tray_window_controller.dart';
+import 'preferences_service.dart';
 
 /// Detects mouse shaking behavior during drag operations.
 /// Opens the popup when the user shakes the mouse for a sustained period.
@@ -23,9 +24,9 @@ class MouseShakeDetector {
   static const int _positionHistorySize = 10;
   static const double _shakeThreshold = 200.0; // Total movement in window
   static const int _minDirectionChanges = 2; // Just 2 direction changes needed
-  static const Duration _shakeDuration = Duration(
-    milliseconds: 600,
-  ); // 0.6 seconds
+  Duration _shakeDuration = const Duration(
+    milliseconds: 1000,
+  ); // Default 1 second, configurable
   static const Duration _resetDelay = Duration(
     milliseconds: 400,
   ); // Reset if no movement
@@ -35,6 +36,9 @@ class MouseShakeDetector {
   Future<void> init() async {
     try {
       _channel.setMethodCallHandler(_handleMethodCall);
+
+      // Load shake duration from preferences
+      await loadShakeDuration();
 
       // Set up callback to open popup on shake detection
       onShakeDetected = () {
@@ -91,6 +95,35 @@ class MouseShakeDetector {
         '⚠️ MouseShakeDetector: Failed to request accessibility permission: $e',
       );
     }
+  }
+
+  /// Load shake duration from preferences
+  Future<void> loadShakeDuration() async {
+    try {
+      final seconds = await PreferencesService.instance
+          .getShakeDurationSeconds();
+      _shakeDuration = Duration(milliseconds: (seconds.clamp(0.1, 3.0) * 1000).toInt());
+      debugPrint('⏱️ MouseShakeDetector: Loaded shake duration: ${seconds}s');
+    } catch (e) {
+      debugPrint('⚠️ MouseShakeDetector: Failed to load shake duration: $e');
+    }
+  }
+
+  /// Update shake duration in seconds (0.1 to 3.0)
+  Future<void> updateShakeDuration(double seconds) async {
+    try {
+      final clamped = seconds.clamp(0.1, 3.0);
+      _shakeDuration = Duration(milliseconds: (clamped * 1000).toInt());
+      await PreferencesService.instance.setShakeDurationSeconds(clamped);
+      debugPrint('✅ MouseShakeDetector: Updated shake duration to ${clamped}s');
+    } catch (e) {
+      debugPrint('⚠️ MouseShakeDetector: Failed to update shake duration: $e');
+    }
+  }
+
+  /// Get current shake duration in seconds
+  double getShakeDurationSeconds() {
+    return _shakeDuration.inMilliseconds / 1000.0;
   }
 
   Future<dynamic> _handleMethodCall(MethodCall call) async {
@@ -190,7 +223,7 @@ class MouseShakeDetector {
     }
 
     // Need at least a few positions to detect shaking
-    if (_recentPositions.length < 4) return;
+    if (_recentPositions.length < 3) return;
 
     // Check if current movement pattern indicates shaking
     final isCurrentlyShaking = _detectShakePattern();
@@ -234,7 +267,7 @@ class MouseShakeDetector {
 
   /// Detect if the recent position history shows a shaking pattern
   bool _detectShakePattern() {
-    if (_recentPositions.length < 4) return false;
+    if (_recentPositions.length < 3) return false;
 
     // Calculate direction changes and total movement
     int directionChangesX = 0;
