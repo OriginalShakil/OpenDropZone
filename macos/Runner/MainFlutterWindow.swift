@@ -367,6 +367,53 @@ class FileIconBridge: NSObject {
   }
 }
 
+class FilePasteboardWriter: NSObject, NSPasteboardWriting {
+  let fileURL: URL
+
+  init(url: URL) {
+    self.fileURL = url
+    super.init()
+  }
+
+  func writableTypes(for pasteboard: NSPasteboard) -> [NSPasteboard.PasteboardType] {
+    var types: [NSPasteboard.PasteboardType] = [
+      .fileURL,
+      NSPasteboard.PasteboardType("public.file-url"),
+      NSPasteboard.PasteboardType("NSFilenamesPboardType"),
+      .string,
+      NSPasteboard.PasteboardType("public.utf8-plain-text"),
+      NSPasteboard.PasteboardType("public.url")
+    ]
+    let nsUrlTypes = (fileURL as NSURL).writableTypes(for: pasteboard)
+    for t in nsUrlTypes {
+      if !types.contains(t) {
+        types.append(t)
+      }
+    }
+    return types
+  }
+
+  func writingOptions(forType type: NSPasteboard.PasteboardType, pasteboard: NSPasteboard) -> NSPasteboard.WritingOptions {
+    if (fileURL as NSURL).writableTypes(for: pasteboard).contains(type) {
+      return (fileURL as NSURL).writingOptions(forType: type, pasteboard: pasteboard)
+    }
+    return []
+  }
+
+  func pasteboardPropertyList(forType type: NSPasteboard.PasteboardType) -> Any? {
+    if type == NSPasteboard.PasteboardType("NSFilenamesPboardType") {
+      return [fileURL.path]
+    }
+    if type == .string || type == NSPasteboard.PasteboardType("public.utf8-plain-text") {
+      return fileURL.path
+    }
+    if type == .fileURL || type == NSPasteboard.PasteboardType("public.file-url") || type == NSPasteboard.PasteboardType("public.url") {
+      return (fileURL as NSURL).pasteboardPropertyList(forType: type) ?? fileURL.absoluteString
+    }
+    return (fileURL as NSURL).pasteboardPropertyList(forType: type)
+  }
+}
+
 class NativeDragOutBridge: NSObject, NSDraggingSource {
   static let shared = NativeDragOutBridge()
   private var channel: FlutterMethodChannel?
@@ -408,7 +455,8 @@ class NativeDragOutBridge: NSObject, NSDraggingSource {
 
     var draggingItems: [NSDraggingItem] = []
     for (index, url) in fileURLs.enumerated() {
-      let item = NSDraggingItem(pasteboardWriter: url as NSURL)
+      let writer = FilePasteboardWriter(url: url)
+      let item = NSDraggingItem(pasteboardWriter: writer)
       let icon = NSWorkspace.shared.icon(forFile: url.path)
       let iconSize = NSSize(width: 36, height: 36)
       let offset = CGFloat(min(index * 4, 20))
@@ -440,13 +488,16 @@ class NativeDragOutBridge: NSObject, NSDraggingSource {
       ) ?? NSEvent()
     }
 
-    contentView.beginDraggingSession(with: draggingItems, event: dragEvent, source: self)
+    let session = contentView.beginDraggingSession(with: draggingItems, event: dragEvent, source: self)
+    // Populate session pasteboard explicitly for apps (like Transporter, Terminal, Xcode) that read top-level pasteboard property lists
+    session.draggingPasteboard.setPropertyList(paths, forType: NSPasteboard.PasteboardType("NSFilenamesPboardType"))
+    session.draggingPasteboard.writeObjects(fileURLs as [NSURL])
     return true
   }
 
   func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
-    // Primary move operation so Finder relocates the files instead of duplicating/copying them
-    return [.move, .generic, .copy]
+    // Return .every so target apps (Transporter, Xcode, Terminal, Finder, Mail, etc.) accept the drag with whatever operation they require (copy, move, generic, link)
+    return .every
   }
 
   func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
