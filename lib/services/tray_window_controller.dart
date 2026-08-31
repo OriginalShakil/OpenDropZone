@@ -93,6 +93,12 @@ class TrayWindowController with TrayListener, WindowListener {
           onFilesReceivedFromTray?.call(paths);
           await showWindow();
         }
+      } else if (call.method == 'onClickedOutside') {
+        if (!_isModalOpen && !_isDraggingOut) {
+          _isAutoOpenedForDrag = false;
+          _cancelDragAutoCloseTimer();
+          await hideWindow();
+        }
       }
     });
 
@@ -125,6 +131,9 @@ class TrayWindowController with TrayListener, WindowListener {
 
   void dispose() {
     _cancelDragAutoCloseTimer();
+    try {
+      _channel.invokeMethod('stopClickOutsideMonitoring');
+    } catch (_) {}
     trayManager.removeListener(this);
     windowManager.removeListener(this);
   }
@@ -177,10 +186,18 @@ class TrayWindowController with TrayListener, WindowListener {
     await _positionWindowUnderTray();
     await windowManager.show();
     await windowManager.focus();
+    try {
+      await _channel.invokeMethod('startClickOutsideMonitoring');
+    } catch (_) {}
   }
 
   Future<void> hideWindow({bool animated = true}) async {
     _cancelDragAutoCloseTimer();
+    _isDraggingOut = false;
+    _isAutoOpenedForDrag = false;
+    try {
+      await _channel.invokeMethod('stopClickOutsideMonitoring');
+    } catch (_) {}
     if (animated && onAnimateOut != null) {
       try {
         await onAnimateOut!.call();

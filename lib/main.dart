@@ -161,6 +161,7 @@ class _DropzoneHomeState extends State<DropzoneHome>
 
     TrayWindowController.instance.onWindowShow = () {
       _validateAndSyncFiles();
+      _fileListKey.currentState?.clearSelection();
       if (mounted) {
         setState(() {
           _arrowOffset = TrayWindowController.instance.arrowOffset;

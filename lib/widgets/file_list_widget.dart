@@ -61,24 +61,28 @@ class FileListWidgetState extends State<FileListWidget> {
         final removeAfterDragOut = await PreferencesService.instance
             .getRemoveAfterDragOut();
 
-        // Allow brief moment for Finder filesystem move to settle
-        Future.delayed(const Duration(milliseconds: 300), () {
-          if (mounted) {
-            setState(() {
-              for (final path in draggedPaths) {
-                final fileExists =
-                    File(path).existsSync() || Directory(path).existsSync();
+        if (mounted) {
+          setState(() {
+            for (final path in draggedPaths) {
+              final fileExists =
+                  File(path).existsSync() || Directory(path).existsSync();
 
-                // Remove if: file no longer exists OR user preference is enabled
-                if (!fileExists || removeAfterDragOut) {
-                  widget.files.removeWhere((f) => f.path == path);
-                  _selectedPaths.remove(path);
-                  _iconCache.remove(path);
-                }
+              // Remove if: file no longer exists OR user preference is enabled
+              if (!fileExists || removeAfterDragOut) {
+                widget.files.removeWhere((f) => f.path == path);
+                _iconCache.remove(path);
               }
-            });
-          }
-        });
+            }
+            // Clear selection so items do not remain highlighted
+            _selectedPaths.clear();
+          });
+        }
+
+        // Auto-dismiss the popup shelf once drag-out completes
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (mounted) {
+          await TrayWindowController.instance.hideWindow();
+        }
       }
     });
 

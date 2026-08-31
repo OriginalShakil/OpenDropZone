@@ -6,6 +6,14 @@ import AVFoundation
 import Carbon
 
 class MainFlutterWindow: NSWindow {
+  override var canBecomeKey: Bool {
+    return true
+  }
+
+  override var canBecomeMain: Bool {
+    return true
+  }
+
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame
@@ -29,7 +37,7 @@ class MainFlutterWindow: NSWindow {
     ]
 
     RegisterGeneratedPlugins(registry: flutterViewController)
-    TrayDragBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
+    TrayDragBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger, window: self)
     StartupBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
     NativeDragOutBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger, window: self)
     FileIconBridge.shared.setup(messenger: flutterViewController.engine.binaryMessenger)
@@ -419,6 +427,7 @@ class NativeDragOutBridge: NSObject, NSDraggingSource {
   private var channel: FlutterMethodChannel?
   weak var window: NSWindow?
   private var currentDraggingPaths: [String] = []
+  var isDragging = false
 
   func setup(messenger: FlutterBinaryMessenger, window: NSWindow?) {
     self.window = window
@@ -446,9 +455,13 @@ class NativeDragOutBridge: NSObject, NSDraggingSource {
       return false
     }
 
+    self.isDragging = true
     self.currentDraggingPaths = paths
     let fileURLs = paths.compactMap { URL(fileURLWithPath: $0) }
-    if fileURLs.isEmpty { return false }
+    if fileURLs.isEmpty {
+      self.isDragging = false
+      return false
+    }
 
     let mouseLocation = window.mouseLocationOutsideOfEventStream
     let viewPoint = contentView.convert(mouseLocation, from: nil)
@@ -501,6 +514,7 @@ class NativeDragOutBridge: NSObject, NSDraggingSource {
   }
 
   func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+    self.isDragging = false
     let isMove = operation.contains(.move) || operation == .move || operation == .delete
     channel?.invokeMethod("onDragEnded", arguments: [
       "operation": isMove ? "move" : "copy",
@@ -602,12 +616,22 @@ class StartupBridge: NSObject {
 class TrayDragBridge: NSObject {
   static let shared = TrayDragBridge()
   private var channel: FlutterMethodChannel?
+  weak var window: NSWindow?
+  private var clickOutsideMonitor: Any?
 
-  func setup(messenger: FlutterBinaryMessenger) {
+  func setup(messenger: FlutterBinaryMessenger, window: NSWindow?) {
+    self.window = window
     channel = FlutterMethodChannel(name: "dropzone/tray_drag", binaryMessenger: messenger)
     channel?.setMethodCallHandler { [weak self] (call, result) in
+      guard let self = self else { return }
       if call.method == "registerTrayButton" {
-        self?.scanAndRegisterStatusBarButtons()
+        self.scanAndRegisterStatusBarButtons()
+        result(true)
+      } else if call.method == "startClickOutsideMonitoring" {
+        self.startClickOutsideMonitoring()
+        result(true)
+      } else if call.method == "stopClickOutsideMonitoring" {
+        self.stopClickOutsideMonitoring()
         result(true)
       } else {
         result(FlutterMethodNotImplemented)
@@ -619,6 +643,29 @@ class TrayDragBridge: NSObject {
     }
     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
       self.scanAndRegisterStatusBarButtons()
+    }
+  }
+
+  func startClickOutsideMonitoring() {
+    stopClickOutsideMonitoring()
+    clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
+      guard let self = self, let window = self.window, window.isVisible else { return }
+      // Do not dismiss while user is dragging items out
+      if NativeDragOutBridge.shared.isDragging { return }
+
+      let clickLocation = NSEvent.mouseLocation
+      if !window.frame.contains(clickLocation) {
+        DispatchQueue.main.async {
+          self.channel?.invokeMethod("onClickedOutside", arguments: nil)
+        }
+      }
+    }
+  }
+
+  func stopClickOutsideMonitoring() {
+    if let monitor = clickOutsideMonitor {
+      NSEvent.removeMonitor(monitor)
+      clickOutsideMonitor = nil
     }
   }
 

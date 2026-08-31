@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../services/shortcut_service.dart';
 import '../services/startup_service.dart';
 import '../services/tray_window_controller.dart';
@@ -25,6 +26,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
   bool _launchAtStartup = false;
   bool _removeAfterDragOut = false;
   double _shakeDurationSeconds = 1.0;
+  String _appVersion = '1.0.0';
   bool _isLoading = true;
 
   ShortcutModel _openPopupShortcut = ShortcutService.instance.openPopupShortcut;
@@ -43,12 +45,20 @@ class _SettingsSheetState extends State<SettingsSheet> {
         .getRemoveAfterDragOut();
     final shakeDuration = await PreferencesService.instance
         .getShakeDurationSeconds();
+    String version = '1.0.0';
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (info.version.isNotEmpty) {
+        version = info.version;
+      }
+    } catch (_) {}
 
     if (mounted) {
       setState(() {
         _launchAtStartup = isEnabled;
         _removeAfterDragOut = removeAfterDragOut;
         _shakeDurationSeconds = shakeDuration;
+        _appVersion = version;
         _openPopupShortcut = ShortcutService.instance.openPopupShortcut;
         _addSelectionShortcut = ShortcutService.instance.addSelectionShortcut;
         _isLoading = false;
@@ -453,7 +463,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Open Drop Zone for macOS • v0.1.0',
+                  'Open Drop Zone for macOS • v$_appVersion',
                   style: TextStyle(
                     fontSize: 10.5,
                     color: isDark
