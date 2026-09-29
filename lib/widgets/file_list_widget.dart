@@ -360,7 +360,27 @@ class FileListWidgetState extends State<FileListWidget> {
   }
 
   // --- Marquee Selection Logic ---
+
+  /// Returns true if the given global position is over any file item tile.
+  bool _isPositionOverItem(Offset globalPosition) {
+    for (final file in widget.files) {
+      final key = _itemKeys[file.path];
+      final itemBox = key?.currentContext?.findRenderObject() as RenderBox?;
+      if (itemBox != null && itemBox.attached) {
+        final localPos = itemBox.globalToLocal(globalPosition);
+        if (itemBox.paintBounds.contains(localPos)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   void _onMarqueeStart(DragStartDetails details) {
+    // Don't start marquee if the drag began on top of a file item —
+    // let the item's Listener handle it as a native drag-out instead.
+    if (_isPositionOverItem(details.globalPosition)) return;
+
     final gridBox =
         _gridAreaKey.currentContext?.findRenderObject() as RenderBox?;
     if (gridBox == null) return;

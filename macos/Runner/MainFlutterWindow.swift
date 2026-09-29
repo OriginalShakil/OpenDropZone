@@ -384,21 +384,11 @@ class FilePasteboardWriter: NSObject, NSPasteboardWriting {
   }
 
   func writableTypes(for pasteboard: NSPasteboard) -> [NSPasteboard.PasteboardType] {
-    var types: [NSPasteboard.PasteboardType] = [
+    return [
       .fileURL,
-      NSPasteboard.PasteboardType("public.file-url"),
-      NSPasteboard.PasteboardType("NSFilenamesPboardType"),
       .string,
-      NSPasteboard.PasteboardType("public.utf8-plain-text"),
       NSPasteboard.PasteboardType("public.url")
     ]
-    let nsUrlTypes = (fileURL as NSURL).writableTypes(for: pasteboard)
-    for t in nsUrlTypes {
-      if !types.contains(t) {
-        types.append(t)
-      }
-    }
-    return types
   }
 
   func writingOptions(forType type: NSPasteboard.PasteboardType, pasteboard: NSPasteboard) -> NSPasteboard.WritingOptions {
@@ -409,14 +399,14 @@ class FilePasteboardWriter: NSObject, NSPasteboardWriting {
   }
 
   func pasteboardPropertyList(forType type: NSPasteboard.PasteboardType) -> Any? {
-    if type == NSPasteboard.PasteboardType("NSFilenamesPboardType") {
-      return [fileURL.path]
+    if type == .fileURL || type == NSPasteboard.PasteboardType("public.file-url") {
+      return (fileURL as NSURL).pasteboardPropertyList(forType: type) ?? fileURL.absoluteString
     }
     if type == .string || type == NSPasteboard.PasteboardType("public.utf8-plain-text") {
       return fileURL.path
     }
-    if type == .fileURL || type == NSPasteboard.PasteboardType("public.file-url") || type == NSPasteboard.PasteboardType("public.url") {
-      return (fileURL as NSURL).pasteboardPropertyList(forType: type) ?? fileURL.absoluteString
+    if type == NSPasteboard.PasteboardType("public.url") {
+      return fileURL.absoluteString
     }
     return (fileURL as NSURL).pasteboardPropertyList(forType: type)
   }
@@ -504,7 +494,6 @@ class NativeDragOutBridge: NSObject, NSDraggingSource {
     let session = contentView.beginDraggingSession(with: draggingItems, event: dragEvent, source: self)
     // Populate session pasteboard explicitly for apps (like Transporter, Terminal, Xcode) that read top-level pasteboard property lists
     session.draggingPasteboard.setPropertyList(paths, forType: NSPasteboard.PasteboardType("NSFilenamesPboardType"))
-    session.draggingPasteboard.writeObjects(fileURLs as [NSURL])
     return true
   }
 
